@@ -1,6 +1,6 @@
 # config.py
 # Digital Twin: Integrated Green Hydrogen & E-Mobility Hub (Zagreb, Croatia)
-# Version: 3.0 (Industrial High-Fidelity)
+# Version: 3.1 (Industrial High-Fidelity - Fixed)
 
 class Config:
     # === 1. SYSTEM CLOCK & LOCATION ===
@@ -30,6 +30,7 @@ class Config:
     ELEC_P_MIN_KW = 0.74
     ELEC_P_NOM_KW = 3.0
     ELEC_P_MAX_KW = 5.63
+    ELECTROLYZER_DEGRADATION_RATE = 0.0002 # Added for health tracking logic
     # Electrochemical Curve: Load vs Efficiency
     ELEC_EFF_CURVE = {0.74: 0.88, 3.0: 0.76, 5.63: 0.62}
     WATER_CONSUMPTION_L_KG = 9.0  # Stoichiometric high-purity water demand
@@ -45,8 +46,10 @@ class Config:
     MAIN_TANK_START_THRESHOLD = 0.50  # Dispatching starts at 50%
 
     COMPRESSOR_POWER_KW = 1.5
+    COMPRESSOR_MIN_RUNTIME_SEC = 120 # Added for hysteresis logic
     JOULE_THOMSON_COEFF = 0.5  # K/bar cooling/heating effect
     SAFETY_MAX_PRESSURE_BAR = 700.0
+    MIN_OPERATING_PRESSURE_BAR = 30.0 # FIXED: Added missing attribute
     LEAK_DETECTION_THRESHOLD = 0.05  # kg/h unexplained loss
 
     # === 6. DOWNSTREAM CONSUMPTION (HRS & FC) ===
@@ -75,4 +78,4 @@ class Config:
     EMERGENCY_SHUTDOWN_SOC = 0.05  # Critical battery shutdown
 
 
-print("🚀 Industrial-Grade Digital Twin Configuration [English] Loaded Successfully.")
+print("🚀 Industrial-Grade Digital Twin Configuration [English] Fixed & Loaded Successfully.")
