@@ -1,83 +1,108 @@
+# ai_forecaster.py
+# AI Energy Forecasting Engine: MLP-based Solar & Wind Prediction
+# Version: 3.0 (Industrial Realism)
+
 import numpy as np
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import MinMaxScaler
 import warnings
 import logging
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
 warnings.filterwarnings("ignore")
 
 
 class AIPredictor:
-    """پیش‌بینی تابش خورشیدی یا انرژی تجدیدپذیر با شبکه عصبی MLP"""
+    """
+    Industrial AI Forecaster using Multi-Layer Perceptron (MLP) for
+    Renewable Energy & Solar Irradiance Prediction.
+    """
 
     def __init__(self):
         self.scaler = MinMaxScaler(feature_range=(0, 1))
+        # Optimized for time-series pattern recognition
         self.model = MLPRegressor(
-            hidden_layer_sizes=(64, 32),
+            hidden_layer_sizes=(128, 64, 32),  # Deeper architecture for better features
             activation='relu',
             solver='adam',
-            max_iter=1000,
+            alpha=0.001,  # L2 regularization to prevent overfitting
+            max_iter=2000,
             warm_start=True,
             random_state=42
         )
         self.is_trained = False
+        self.history_window = 24  # 24-hour lookback window
+
+    def _apply_physical_constraints(self, prediction, current_hour):
+        """
+        Post-processing: Ensures AI doesn't hallucinate solar energy at night.
+        """
+        # Zagreb Solar Window (approx 06:00 to 20:00 depending on season)
+        if current_hour < 5 or current_hour > 21:
+            return 0.0
+        return max(0.0, float(prediction))
 
     def train_on_historical_data(self, data):
         """
-        آموزش مدل روی داده‌های واقعی (تابش خورشیدی یا تولید انرژی)
-        - data: آرایه ۱ بعدی با حداقل 24 داده (ساعتی)
+        Trains the model on historical irradiance or power generation data.
+        - data: 1D array with at least 48-72 data points for meaningful patterns.
         """
         data = np.array(data, dtype=float)
-        if data.size < 24:
-            logging.warning("⚠️ AI Forecaster: Not enough data to train. Minimum 24 points required.")
+        if data.size < self.history_window * 2:
+            logging.warning(f"🧠 AI Forecaster: Insufficient data ({data.size} pts). Need at least 48.")
             return
 
-        # نرمال‌سازی
+        # Normalization
         scaled_data = self.scaler.fit_transform(data.reshape(-1, 1))
 
-        # ساخت X و y با پنجره 24 ساعته
+        # Sliding Window Preparation
         X, y = [], []
-        for i in range(24, len(scaled_data)):
-            X.append(scaled_data[i-24:i, 0])
+        for i in range(self.history_window, len(scaled_data)):
+            X.append(scaled_data[i - self.history_window:i, 0])
             y.append(scaled_data[i, 0])
 
         X, y = np.array(X), np.array(y)
-        if X.size == 0:
-            logging.warning("⚠️ AI Forecaster: Training data window too small. Skipping training.")
-            return
 
-        self.model.fit(X, y)
-        self.is_trained = True
-        logging.info("🧠 AI Forecaster: Model trained successfully on historical data.")
+        try:
+            self.model.fit(X, y)
+            self.is_trained = True
+            logging.info("🧠 AI Forecaster: Model calibrated successfully on Zagreb telemetry.")
+        except Exception as e:
+            logging.error(f"🧠 AI Forecaster Training Error: {e}")
 
-    def predict_next_hours(self, last_24h_data, hours=1):
+    def predict_future(self, last_24h_data, horizon_hours=1):
         """
-        پیش‌بینی n ساعت آینده
-        - last_24h_data: آخرین 24 داده
-        - hours: تعداد ساعت‌های آینده برای پیش‌بینی
+        Predicts future energy availability for a given horizon.
+        - last_24h_data: The most recent 24-hour sequence.
+        - horizon_hours: Number of hours to forecast ahead.
         """
         last_24h_data = np.array(last_24h_data, dtype=float)
-        predictions = []
+        forecasts = []
+        current_hour = datetime.now().hour
 
-        for _ in range(hours):
-            if not self.is_trained or last_24h_data.size < 24:
-                # fallback: میانگین آخرین 6 داده یا 0
-                fallback = float(np.mean(last_24h_data[-6:])) if last_24h_data.size > 0 else 0.0
-                logging.info(f"⚠️ AI Forecaster: Using fallback prediction {fallback:.2f} W/m²")
-                predictions.append(fallback)
-                # اضافه کردن پیش‌بینی به داده‌ها برای ساعت بعد
-                last_24h_data = np.append(last_24h_data, fallback)
+        # Sliding window prediction loop
+        working_data = last_24h_data.copy()
+
+        for i in range(horizon_hours):
+            if not self.is_trained or working_data.size < self.history_window:
+                # Fallback to persistent forecasting (last known good average)
+                fallback = float(np.mean(working_data[-3:])) if working_data.size > 0 else 50.0
+                forecasts.append(fallback)
+                working_data = np.append(working_data, fallback)
                 continue
 
-            # آماده‌سازی ورودی و نرمال‌سازی
-            recent_scaled = self.scaler.transform(last_24h_data[-24:].reshape(-1, 1)).reshape(1, 24)
-            pred_scaled = self.model.predict(recent_scaled)
-            pred_final = self.scaler.inverse_transform(pred_scaled.reshape(-1, 1))
-            pred_value = max(0.0, float(pred_final[0][0]))
-            predictions.append(pred_value)
+            # Scale and Predict
+            input_window = self.scaler.transform(working_data[-self.history_window:].reshape(-1, 1)).reshape(1,
+                                                                                                             self.history_window)
+            pred_scaled = self.model.predict(input_window)
+            pred_inv = self.scaler.inverse_transform(pred_scaled.reshape(-1, 1))
 
-            # اضافه کردن پیش‌بینی به داده‌ها برای گام بعد
-            last_24h_data = np.append(last_24h_data, pred_value)
+            # Apply Physical Realism
+            pred_final = self._apply_physical_constraints(pred_inv[0][0], (current_hour + i + 1) % 24)
+            forecasts.append(pred_final)
 
-        return predictions if hours > 1 else predictions[0]
+            # Feed prediction back for multi-step forecast
+            working_data = np.append(working_data, pred_final)
+
+        return forecasts if horizon_hours > 1 else forecasts[0]
