@@ -1,5 +1,7 @@
-#weather_api
 # weather_api.py
+# High-Fidelity Environmental Data Engine (Zagreb Hub)
+# Version: 3.0 (Industrial Realism)
+
 import requests
 import datetime
 import numpy as np
@@ -10,20 +12,28 @@ logging.basicConfig(level=logging.INFO)
 
 
 class WeatherProvider:
+    """
+    Advanced Environmental Engine providing real-time telemetry for
+    Solar Irradiance, Wind Turbulence, and Soiling Impact.
+    """
+
     def __init__(self):
         self.lat = Config.LOCATION["lat"]
         self.lon = Config.LOCATION["lon"]
         self.base_url = "https://api.open-meteo.com/v1/forecast"
+        # Track days since last rain to calculate Soiling Loss
+        self.days_since_rain = 0
 
     def fetch_current_data(self):
-        """دریافت داده‌های زنده + اصلاح irradiance + پایداری سیستم"""
+        """Fetches live telemetry + calculates environmental degradation factors."""
 
         params = {
             "latitude": self.lat,
             "longitude": self.lon,
-            "current_weather": True,
-            "hourly": "temperature_2m,wind_speed_10m,shortwave_radiation",
-            "timezone": "Europe/Zagreb",
+            "current": ["temperature_2m", "relative_humidity_2m", "precipitation", "wind_speed_10m",
+                        "shortwave_radiation"],
+            "hourly": ["temperature_2m", "wind_speed_10m", "shortwave_radiation", "precipitation"],
+            "timezone": "Europe/Berlin",  # Zagreb/Central Europe
             "forecast_days": 1
         }
 
@@ -32,59 +42,67 @@ class WeatherProvider:
             response.raise_for_status()
             data = response.json()
 
-            current = data.get('current_weather', {})
+            current = data.get('current', {})
             hourly = data.get('hourly', {})
 
-            # ⏱ ساعت فعلی
+            # ⏱️ Synchronize with current hour
             now_hour = datetime.datetime.now().hour
 
-            # 🌞 استخراج irradiance واقعی (اصلاح اصلی)
-            if 'shortwave_radiation' in hourly:
-                radiation_series = hourly['shortwave_radiation']
+            # --- 🌞 Solar Irradiance Logic ---
+            irradiance = current.get('shortwave_radiation', 0.0)
+            # API Glitch / Night Protection: If 0 at noon or None, use 1-hour lookahead/fallback
+            if irradiance is None or (10 < now_hour < 15 and irradiance < 10):
+                irradiance = hourly.get('shortwave_radiation', [50.0])[now_hour]
 
-                # جلوگیری از out-of-range
-                if len(radiation_series) > now_hour:
-                    irradiance_now = radiation_series[now_hour]
-                else:
-                    irradiance_now = radiation_series[0]
-
-                history = radiation_series[:24]
+            # --- 🌧️ Soiling & Rain Logic (Industrial Realism) ---
+            precip = current.get('precipitation', 0.0)
+            if precip > 1.0:  # Significant rain cleans the panels
+                self.days_since_rain = 0
             else:
-                irradiance_now = 50.0
-                history = [50.0] * 24
+                self.days_since_rain += (Config.TIMESTEP_SEC / 86400)  # Increment day fraction
 
-            # 🧠 Anti-zero / Night / API glitch protection
-            if irradiance_now is None or irradiance_now <= 0:
-                irradiance_now = max(np.mean(history), 20.0)
+            # Calculate current soiling factor (e.g., 0.98 = 2% loss)
+            soiling_factor = max(0.85, 1.0 - (self.days_since_rain * Config.SOILING_LOSS_RATE))
 
-            # 🌬️ Wind fallback
-            wind_speed = current.get('windspeed', 4.5)
-            if wind_speed is None:
-                wind_speed = 4.5
+            # --- 🌬️ Wind & Turbulence ---
+            wind_speed = current.get('wind_speed_10m', 4.5)
+            # Synthetic Turbulence Intensity (Realistic variation for Zagreb terrain)
+            turbulence = Config.TURBULENCE_INTENSITY_LIMIT * (1 + 0.1 * np.random.randn())
 
-            # 🌡️ Temperature fallback
-            temp = current.get('temperature', 15.0)
+            # --- 🌡️ Temperature & Humidity ---
+            temp = current.get('temperature_2m', 15.0)
+            humidity = current.get('relative_humidity_2m', 50.0)
 
             weather_packet = {
                 "temp": float(temp),
+                "humidity": float(humidity),
                 "wind_speed": float(wind_speed),
-                "irradiance": float(irradiance_now),
-                "history_24h": history
+                "turbulence": float(turbulence),
+                "irradiance_raw": float(irradiance),
+                "irradiance_effective": float(irradiance * soiling_factor),
+                "soiling_factor": float(soiling_factor),
+                "precipitation": float(precip),
+                "history_24h": hourly.get('shortwave_radiation', [0.0] * 24)
             }
 
             logging.info(
-                f"📡 Weather Online (Zagreb): {irradiance_now:.1f} W/m2 | "
-                f"{temp:.1f}°C | Wind {wind_speed:.1f} m/s"
+                f"📡 Environmental Telemetry (Zagreb): {irradiance:.1f} W/m2 | "
+                f"Soiling: {soiling_factor:.3f} | Temp: {temp:.1f}°C"
             )
 
             return weather_packet
 
         except Exception as e:
-            logging.warning(f"⚠️ API Error (Using Fallback): {e}")
-
+            logging.error(f"⚠️ Environmental API Failure: {e}")
+            # Safe Industrial Fallback
             return {
                 "temp": 15.0,
+                "humidity": 50.0,
                 "wind_speed": 4.5,
-                "irradiance": 50.0,
+                "turbulence": 0.12,
+                "irradiance_raw": 50.0,
+                "irradiance_effective": 48.0,
+                "soiling_factor": 0.98,
+                "precipitation": 0.0,
                 "history_24h": [50.0] * 24
             }
