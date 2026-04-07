@@ -1,61 +1,72 @@
-# main.py - TEST VERSION (Simplified & High Contrast)
+# main.py - NEW MINIMALIST DESIGN
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 from datetime import datetime
 import time
 
-# --- 1. SETTINGS ---
-st.set_page_config(page_title="LUMINIH2 TEST", layout="centered") # تغییر به حالت متمرکز
+# --- 1. تنظیمات ظاهری کاملاً جدید ---
+st.set_page_config(page_title="LUMINIH2 REBORN", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #ffffff; }
-    .test-box { 
-        border: 2px dashed #cbd5e1; padding: 20px; border-radius: 10px; 
-        background: #f8fafc; margin-bottom: 20px;
+    .stApp { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+    .stat-card {
+        background: white;
+        padding: 25px;
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        text-align: center;
+        border-bottom: 5px solid #007bff;
     }
-    h1 { color: #0f172a; border-bottom: 4px solid #38bdf8; padding-bottom: 10px; }
+    .main-title {
+        font-family: 'Helvetica';
+        color: #1a1a1a;
+        text-align: center;
+        font-weight: 900;
+        font-size: 50px;
+        margin-bottom: 40px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. MINIMAL LOGIC ---
+# --- 2. منطق ساده برای اطمینان از آپدیت ---
 if 'init' not in st.session_state:
     st.session_state.update({'tank': 0.0, 'bess': 0.1, 'init': True})
 
-# منطق ساده شده برای تست
-st.session_state.tank = (st.session_state.tank + 0.1) % 5
-st.session_state.bess = (st.session_state.bess + 0.01) % 1
+# ایجاد تغییرات عددی برای تست بصری
+st.session_state.tank = round((st.session_state.tank + 0.1) % 5, 2)
+st.session_state.bess = round((st.session_state.bess + 0.01) % 1, 2)
 
-# --- 3. UI RENDER (حذف اکثر نمودارها برای تست) ---
+# --- 3. بدنه اصلی (بدون لایه‌بندی - فقط کارت‌های اطلاعاتی) ---
 
-st.title("🧪 LUMINIH2 - TEST MODE")
-st.write(f"Last Update: {datetime.now().strftime('%H:%M:%S')}")
+st.markdown('<h1 class="main-title">LUMINIH2 STATION</h1>', unsafe_allow_html=True)
 
-# نمایش داده‌های خام به جای نمودارهای پیچیده
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
+
 with col1:
-    st.markdown('<div class="test-box">', unsafe_allow_html=True)
-    st.subheader("🔋 Battery Status")
+    st.markdown('<div class="stat-card">', unsafe_allow_html=True)
+    st.write("### 🔋 BATTERY")
+    st.title(f"{st.session_state.bess * 100:.0f}%")
     st.progress(st.session_state.bess)
-    st.metric("SoC (%)", f"{st.session_state.bess*100:.1f}%")
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
-    st.markdown('<div class="test-box">', unsafe_allow_html=True)
-    st.subheader("💧 H2 Storage")
-    # تنها نمودار باقی‌مانده برای تست بصری
-    fig = go.Figure(go.Indicator(
-        mode = "gauge+number",
-        value = st.session_state.tank,
-        gauge = {'axis': {'range': [0, 5]}, 'bar': {'color': "#38bdf8"}}
-    ))
-    fig.update_layout(height=150, margin=dict(t=0, b=0, l=10, r=10))
-    st.plotly_chart(fig, use_container_width=True)
+    st.markdown('<div class="stat-card">', unsafe_allow_html=True)
+    st.write("### 💧 H2 TANK")
+    st.title(f"{st.session_state.tank} kg")
+    st.caption("Target: 5.0 kg")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# بخش فروش به شبکه (ساده شده)
-st.info("System is currently prioritizing Battery & H2 Station.")
+with col3:
+    st.markdown('<div class="stat-card">', unsafe_allow_html=True)
+    st.write("### 🌍 ZAGREB")
+    st.metric("Status", "Operational")
+    st.write(f"Time: {datetime.now().strftime('%H:%M:%S')}")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# حذف نمودارهای سنگین (سایکی، پای‌چارت و غیره) برای تست سرعت و تغییر
+st.write("---")
+st.info("تمامی نمودارهای لایه ۴ و دیاگرام‌های پیچیده موقتاً حذف شدند تا تغییر کد تایید شود.")
 
 # REFRESH
 time.sleep(1)
