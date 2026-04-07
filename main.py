@@ -10,6 +10,25 @@ from weather_api import WeatherProvider
 from energy_assets import SolarSystem, WindSystem, BatteryBESS
 from hydrogen_assets import ElectrolyzerS30, HydrogenStorageChain
 from ems_brain import EMSBrain
+import pytz  # این را در ابتدای فایل اضافه کنید
+
+# --- در بخش محاسبات یا بدنه اصلی کد ---
+# تنظیم منطقه زمانی زاگرب
+zagreb_tz = pytz.timezone('Europe/Zagreb')
+now_zagreb = datetime.now(zagreb_tz)
+
+# --- در بخش Header (جایی که ساعت چاپ می‌شود) ---
+with header_l:
+    st.markdown(f"""
+        <div class="status-card">
+            <span style="color: #8b949e; font-size: 14px;">📍 HUB LOCATION: ZAGREB, CROATIA</span><br>
+            <span style="font-size: 26px; font-weight: bold; color: #ffffff;">{now_zagreb.strftime('%H:%M:%S')}</span>
+            <span style="color: #58a6ff; margin-left: 10px;">{now_zagreb.strftime('%A, %d %B %Y')}</span>
+            <hr style="margin: 10px 0; border-color: #30363d;">
+            <span style="color: #8b949e;">WEATHER:</span> 
+            <b>{w['temp']}°C</b> | 💧 {w['humidity']}% | ☀️ {w['irradiance_raw']:.1f} W/m² | 🌬️ {w['wind_speed']} m/s
+        </div>
+    """, unsafe_allow_html=True)
 
 # --- ۱. تنظیمات ظاهری صنعتی (Dark Steel Theme) ---
 st.set_page_config(page_title="H2 Hub Zagreb | Control Room", layout="wide")
