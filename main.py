@@ -1,6 +1,6 @@
 # main.py
 # High-Fidelity Digital Twin Dashboard: Zagreb Green H2 Hub
-# Version: 3.0 (Industrial Cyberpunk Theme)
+# Version: 4.0 (Industrial Control Room Edition)
 
 import streamlit as st
 import pandas as pd
@@ -15,14 +15,15 @@ from energy_assets import SolarSystem, WindSystem, BatteryBESS
 from hydrogen_assets import ElectrolyzerS30, HydrogenStorageChain, FuelCellAircell
 from ems_brain import EMSBrain
 
-# --- 1. UI CONFIGURATION ---
-st.set_page_config(page_title="Zagreb H2 Hub - Digital Twin", layout="wide", initial_sidebar_state="expanded")
+# --- 1. UI CONFIGURATION (Industrial Theme) ---
+st.set_page_config(page_title="Zagreb H2 Hub - Control Room", layout="wide")
 
-# Custom Cyberpunk CSS
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; color: #00ffcc; }
-    .stMetric { background-color: #161b22; border: 1px solid #30363d; padding: 15px; border-radius: 10px; }
+    .main { background-color: #0b0e14; color: #c9d1d9; }
+    .stMetric { background-color: #161b22; border-left: 5px solid #58a6ff; border-radius: 4px; padding: 12px; }
+    .status-card { background-color: #1c2128; border: 1px solid #30363d; padding: 15px; border-radius: 8px; }
+    .source-label { font-size: 20px; font-weight: bold; padding: 8px 20px; border-radius: 20px; border: 1px solid; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -37,127 +38,107 @@ if 'init' not in st.session_state:
     st.session_state.brain = EMSBrain()
     st.session_state.init = True
 
-# --- 3. DATA ACQUISITION & ENGINE EXECUTION ---
-# A. Fetch Environment
+# --- 3. DATA ACQUISITION & CALCULATIONS ---
 w = st.session_state.weather.fetch_current_data()
-pv_engine = SolarSystem()
-wind_engine = WindSystem()
+p_pv = SolarSystem().get_power_output(w['irradiance_raw'], w['temp'], w['soiling_factor'])
+p_wind = WindSystem().get_power_output(w['wind_speed'], w['turbulence'])
 
-# B. Power Generation (with Soiling & Turbulence)
-p_pv = pv_engine.get_power_output(w['irradiance_raw'], w['temp'], w['soiling_factor'])
-p_wind = wind_engine.get_power_output(w['wind_speed'], w['turbulence'])
-
-# C. EMS Strategy
+# EMS Strategy Execution
 source, p_available = st.session_state.brain.decide_energy_source(p_pv, p_wind, st.session_state.battery.soc)
 p_to_batt, p_to_elec = st.session_state.brain.manage_power_flow(p_available, st.session_state.battery.soc)
 
-# D. Update Physical Assets
+# Physical Updates
 batt_status = st.session_state.battery.update_state(p_to_batt)
 elec_metrics = st.session_state.electrolyzer.calculate_production(p_to_elec, w['temp'])
 h2_kg_h = elec_metrics['h2_kg_h']
-
-# E. Logistics & Economics
 logistics = st.session_state.h2_chain.manage_chain(h2_kg_h)
 eco = st.session_state.brain.calculate_economics(h2_kg_h * (Config.TIMESTEP_SEC / 3600), p_to_elec, source)
 
-# --- 4. DASHBORD LAYOUT ---
-st.title("🎛️ Zagreb Integrated H2 Hub | Industrial Digital Twin")
-st.markdown(
-    f"**Environmental Context:** {w['temp']}°C | Irradiance: {w['irradiance_effective']:.1f} W/m² (Soiling: {w['soiling_factor']:.2%}) | Wind: {w['wind_speed']} m/s")
+# --- 4. TOP BAR: TELEMETRY & SOURCE (Requirement 1 & 2) ---
+header_l, header_r = st.columns([1, 1])
 
-# --- ROW 1: PRIMARY TELEMETRY (GAUGES) ---
-cols = st.columns([1, 1, 1, 1])
+with header_l:
+    st.markdown(f"""
+        <div class="status-card">
+            <span style="color: #8b949e; font-size: 14px;">📍 HUB LOCATION: ZAGREB, CROATIA</span><br>
+            <span style="font-size: 26px; font-weight: bold; color: #ffffff;">{datetime.now().strftime('%H:%M:%S')}</span>
+            <span style="color: #58a6ff; margin-left: 10px;">{datetime.now().strftime('%A, %d %B %Y')}</span>
+            <hr style="margin: 10px 0; border-color: #30363d;">
+            <span style="color: #8b949e;">WEATHER:</span> 
+            <b>{w['temp']}°C</b> | 💧 {w['humidity']}% | ☀️ {w['irradiance_raw']:.1f} W/m² | 🌬️ {w['wind_speed']} m/s
+        </div>
+    """, unsafe_allow_html=True)
 
-with cols[0]:
-    # Battery Status Gauge
-    fig_batt = go.Figure(go.Indicator(
-        mode="gauge+number", value=batt_status['soc'] * 100,
-        title={'text': "Battery SOC %"},
-        gauge={'bar': {'color': "#00ffcc"}, 'axis': {'range': [0, 100]},
-               'steps': [{'range': [0, 20], 'color': "red"}]}))
-    fig_batt.update_layout(height=220, margin=dict(t=40, b=0, l=20, r=20), paper_bgcolor='rgba(0,0,0,0)',
-                           font={'color': "white"})
-    st.plotly_chart(fig_batt, use_container_width=True)
-    st.caption(f"Health (SoH): {batt_status['soh']:.2%}")
+with header_r:
+    # Source Switching Logic Visualization
+    src_colors = {"Solar (PV)": "#ffcc00", "Wind Turbine": "#00d4ff", "National Grid": "#ff4b4b"}
+    current_color = src_colors.get(source, "#ffffff")
+    st.markdown(f"""
+        <div style="text-align: right; margin-top: 15px;">
+            <span style="color: #8b949e; font-size: 14px;">PRIMARY ENERGY INPUT</span><br><br>
+            <span class="source-label" style="color: {current_color}; border-color: {current_color}; background-color: {current_color}11;">
+                ● {source.upper()}
+            </span>
+        </div>
+    """, unsafe_allow_html=True)
 
-with cols[1]:
-    # H2 Storage Pressure
-    fig_press = go.Figure(go.Indicator(
-        mode="gauge+number", value=logistics['pressure_bar'],
-        title={'text': "Main Tank Pressure (bar)"},
-        gauge={'axis': {'range': [0, 700]}, 'bar': {'color': "#3399ff"}}))
-    fig_press.update_layout(height=220, margin=dict(t=40, b=0, l=20, r=20), paper_bgcolor='rgba(0,0,0,0)',
-                            font={'color': "white"})
-    st.plotly_chart(fig_press, use_container_width=True)
-    st.caption(f"Tank Temperature: {logistics['temp_c']:.1f} °C")
+st.divider()
 
-with cols[2]:
-    # Economic KPI: LCOH
-    st.metric("Live LCOH (€/kg)", f"€ {eco['lcoh']:.2f}", delta=f"{eco['lcoh'] - 4.5:.2f} vs Target")
-    st.metric("Carbon Revenue", f"€ {eco['carbon_revenue']:.4f}", delta=f"{eco['net_co2_kg']:.2f} kg CO2 saved")
+# --- 5. MAIN DASHBOARD: DIVERSE CHARTS (Requirement 3 & 4) ---
+col_p, col_b, col_h = st.columns([1.2, 1, 1.2])
 
-with cols[3]:
-    # Purity & Efficiency
-    st.metric("H2 Purity", f"{elec_metrics['purity']:.4f}%")
-    st.metric("Water Consumption", f"{elec_metrics['water_l_h']:.2f} L/h")
-    st.metric("HRS Inventory", f"{logistics['hrs_kg']:.2f} / 5.0 kg")
+with col_p:
+    st.subheader("⚡ Power Distribution (kW)")
+    # Bar Chart for Power Balance
+    fig_power = go.Figure(go.Bar(
+        x=['Inbound', 'To Battery', 'To Electrolyzer'],
+        y=[p_available, abs(p_to_batt), p_to_elec],
+        marker_color=[current_color, '#00ffcc', '#3399ff'],
+        text=[f"{v:.2f}" for v in [p_available, abs(p_to_batt), p_to_elec]],
+        textposition='auto'
+    ))
+    fig_power.update_layout(height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=20, b=20, l=0, r=0))
+    st.plotly_chart(fig_power, use_container_width=True)
 
-# --- ROW 2: SYSTEM TRENDS ---
-st.subheader("📈 Real-time Asset Performance & Analytics")
-new_data = {
-    'Timestamp': datetime.now().strftime('%H:%M:%S'),
-    'PV_Output': p_pv,
-    'Wind_Output': p_wind,
-    'H2_Production': h2_kg_h * 100,  # scaled for visibility
-    'Battery_SOC': batt_status['soc'] * 100,
-    'LCOH': eco['lcoh']
-}
-st.session_state.history = pd.concat([st.session_state.history, pd.DataFrame([new_data])], ignore_index=True).iloc[-50:]
+with col_b:
+    st.subheader("🔋 Battery SOC")
+    # Donut Chart for Battery
+    fig_soc = go.Figure(go.Pie(
+        labels=['Charged', 'Remaining'],
+        values=[batt_status['soc'], 1 - batt_status['soc']],
+        hole=.7,
+        marker_colors=['#00ffcc', '#161b22'],
+        showlegend=False
+    ))
+    fig_soc.add_annotation(text=f"{batt_status['soc']*100:.1f}%", x=0.5, y=0.5, showarrow=False, font_size=24, font_color="white")
+    fig_soc.update_layout(height=300, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)')
+    st.plotly_chart(fig_soc, use_container_width=True)
 
-# Multi-axis Chart
-fig_trends = make_subplots(specs=[[{"secondary_y": True}]])
-fig_trends.add_trace(
-    go.Scatter(x=st.session_state.history['Timestamp'], y=st.session_state.history['PV_Output'], name="Solar (kW)",
-               line=dict(color="#ffcc00")), secondary_y=False)
-fig_trends.add_trace(
-    go.Scatter(x=st.session_state.history['Timestamp'], y=st.session_state.history['Battery_SOC'], name="Battery (%)",
-               line=dict(color="#00ffcc", dash='dash')), secondary_y=True)
-fig_trends.update_layout(height=400, template="plotly_dark", margin=dict(l=20, r=20, t=20, b=20))
-st.plotly_chart(fig_trends, use_container_width=True)
+with col_h:
+    st.subheader("🧪 Production & Pressure")
+    # Line Chart for Pressure History
+    new_entry = {
+        'Time': datetime.now().strftime('%H:%M:%S'),
+        'Pressure': logistics['pressure_bar'],
+        'H2_Rate': h2_kg_h * 100
+    }
+    st.session_state.history = pd.concat([st.session_state.history, pd.DataFrame([new_entry])], ignore_index=True).iloc[-30:]
+    
+    fig_h2 = go.Figure()
+    fig_h2.add_trace(go.Scatter(x=st.session_state.history['Time'], y=st.session_state.history['Pressure'], 
+                                name="Tank Pressure", line=dict(color='#3399ff', width=3), fill='tozeroy'))
+    fig_h2.update_layout(height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=20, b=20, l=0, r=0))
+    st.plotly_chart(fig_h2, use_container_width=True)
 
-# --- ROW 3: DIGITAL TWIN SCHEMATIC (SANKEY) ---
-st.subheader("🔄 System Mass & Energy Architecture")
-source_idx = 0 if source == "Solar (PV)" else (1 if source == "Wind Turbine" else 2)
-labels = [source, "Battery BESS", "PEM Electrolyzer", "H2 Buffer", "Main Storage", "HRS Station", "Fuel Cell"]
+# --- 6. INDUSTRIAL KPI GRID ---
+st.subheader("🛠️ Asset Diagnostics & Economics")
+kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
-fig_sankey = go.Figure(data=[go.Sankey(
-    node=dict(pad=15, thickness=20, line=dict(color="black", width=0.5), label=labels, color="cyan"),
-    link=dict(
-        source=[0, 0, 1, 2, 3, 4],  # Power Flow
-        target=[1, 2, 2, 3, 4, 5],  # Mass Flow
-        value=[max(0.1, p_to_batt), max(0.1, p_to_elec), 2.0, max(0.1, h2_kg_h * 10), 1.0, 1.0],
-        color='rgba(0, 255, 204, 0.4)'
-    )
-)])
-fig_sankey.update_layout(height=450, font_size=12, template="plotly_dark")
-st.plotly_chart(fig_sankey, use_container_width=True)
+kpi1.metric("Stack Health (SOH)", f"{elec_metrics['soh']:.2%}", delta="-0.01% Cycle")
+kpi2.metric("Hydrogen Purity", f"{elec_metrics['purity']:.4f}%", "Optimal")
+kpi3.metric("Live LCOH", f"€ {eco['lcoh']:.2f}", f"{eco['lcoh']-4.5:.2f} delta")
+kpi4.metric("CO2 Abated", f"{eco['net_co2_kg']:.2f} kg")
 
-# --- SIDEBAR: PREDICTIVE MAINTENANCE & ALERTS ---
-with st.sidebar:
-    st.header("🛠️ Predictive Diagnostics")
-    st.write(f"**Electrolyzer SOH:** {elec_metrics['soh']:.2%}")
-    if elec_metrics['soh'] < 0.95:
-        st.warning("Maintenance Required: Stack degradation detected.")
-
-    st.write(f"**BESS Health:** {batt_status['soh']:.2%}")
-    st.info(f"Total Throughput: {batt_status['throughput']:.2f} kWh")
-
-    st.divider()
-    st.write("**Operational Strategy:**")
-    st.success(f"Current Priority: {source}")
-    st.write(
-        f"Dispatching to: {st.session_state.brain.hydrogen_logistics_control(logistics['buffer_kg'], logistics['main_tank_kg'], logistics['hrs_kg'])[1]}")
-
-# Simulation Loop
+# Simulation Timing
 time.sleep(Config.TIMESTEP_SEC)
 st.rerun()
