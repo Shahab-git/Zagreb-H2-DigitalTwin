@@ -1,144 +1,130 @@
-# main.py
-# High-Fidelity Digital Twin Dashboard: Zagreb Green H2 Hub
-# Version: 4.0 (Industrial Control Room Edition)
-
+# main.py (Industrial Operator Edition)
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import time
 from datetime import datetime
+import time
 
 from config import Config
 from weather_api import WeatherProvider
 from energy_assets import SolarSystem, WindSystem, BatteryBESS
-from hydrogen_assets import ElectrolyzerS30, HydrogenStorageChain, FuelCellAircell
+from hydrogen_assets import ElectrolyzerS30, HydrogenStorageChain
 from ems_brain import EMSBrain
 
-# --- 1. UI CONFIGURATION (Industrial Theme) ---
-st.set_page_config(page_title="Zagreb H2 Hub - Control Room", layout="wide")
+# --- ۱. تنظیمات ظاهری صنعتی (Dark Steel Theme) ---
+st.set_page_config(page_title="H2 Hub Zagreb | Control Room", layout="wide")
 
 st.markdown("""
     <style>
-    .main { background-color: #0b0e14; color: #c9d1d9; }
-    .stMetric { background-color: #161b22; border-left: 5px solid #58a6ff; border-radius: 4px; padding: 12px; }
-    .status-card { background-color: #1c2128; border: 1px solid #30363d; padding: 15px; border-radius: 8px; }
-    .source-label { font-size: 20px; font-weight: bold; padding: 8px 20px; border-radius: 20px; border: 1px solid; }
+    .main { background-color: #0b0e14; }
+    .stMetric { background-color: #1c2128; border-left: 5px solid #00ffcc; border-radius: 4px; padding: 10px; }
+    div[data-testid="stExpander"] { background-color: #1c2128; border: none; }
+    .source-tag { padding: 5px 15px; border-radius: 20px; font-weight: bold; font-family: 'Courier New'; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SESSION STATE INITIALIZATION ---
+# --- ۲. مقداردهی اولیه سیستم ---
 if 'init' not in st.session_state:
-    st.session_state.history = pd.DataFrame()
     st.session_state.battery = BatteryBESS()
     st.session_state.h2_chain = HydrogenStorageChain()
     st.session_state.electrolyzer = ElectrolyzerS30()
-    st.session_state.fuel_cell = FuelCellAircell()
     st.session_state.weather = WeatherProvider()
     st.session_state.brain = EMSBrain()
+    st.session_state.history = pd.DataFrame()
     st.session_state.init = True
 
-# --- 3. DATA ACQUISITION & CALCULATIONS ---
+# --- ۳. دریافت داده‌های زنده و محاسبات ---
 w = st.session_state.weather.fetch_current_data()
 p_pv = SolarSystem().get_power_output(w['irradiance_raw'], w['temp'], w['soiling_factor'])
 p_wind = WindSystem().get_power_output(w['wind_speed'], w['turbulence'])
 
-# EMS Strategy Execution
-source, p_available = st.session_state.brain.decide_energy_source(p_pv, p_wind, st.session_state.battery.soc)
+# منطق سوئیچینگ منبع (Logic-Driven Switching)
+source_name, p_available = st.session_state.brain.decide_energy_source(p_pv, p_wind, st.session_state.battery.soc)
 p_to_batt, p_to_elec = st.session_state.brain.manage_power_flow(p_available, st.session_state.battery.soc)
 
-# Physical Updates
-batt_status = st.session_state.battery.update_state(p_to_batt)
-elec_metrics = st.session_state.electrolyzer.calculate_production(p_to_elec, w['temp'])
-h2_kg_h = elec_metrics['h2_kg_h']
-logistics = st.session_state.h2_chain.manage_chain(h2_kg_h)
-eco = st.session_state.brain.calculate_economics(h2_kg_h * (Config.TIMESTEP_SEC / 3600), p_to_elec, source)
+# بروزرسانی دارایی‌ها
+batt_data = st.session_state.battery.update_state(p_to_batt)
+elec_out = st.session_state.electrolyzer.calculate_production(p_to_elec, w['temp'])
+logistics = st.session_state.h2_chain.manage_chain(elec_out['h2_kg_h'])
 
-# --- 4. TOP BAR: TELEMETRY & SOURCE (Requirement 1 & 2) ---
-header_l, header_r = st.columns([1, 1])
+# --- ۴. بخش بالایی: اطلاعات آب و هوا و زمان (مورد ۱) ---
+top_l, top_r = st.columns([1, 2])
 
-with header_l:
+with top_l:
     st.markdown(f"""
-        <div class="status-card">
-            <span style="color: #8b949e; font-size: 14px;">📍 HUB LOCATION: ZAGREB, CROATIA</span><br>
-            <span style="font-size: 26px; font-weight: bold; color: #ffffff;">{datetime.now().strftime('%H:%M:%S')}</span>
-            <span style="color: #58a6ff; margin-left: 10px;">{datetime.now().strftime('%A, %d %B %Y')}</span>
-            <hr style="margin: 10px 0; border-color: #30363d;">
-            <span style="color: #8b949e;">WEATHER:</span> 
-            <b>{w['temp']}°C</b> | 💧 {w['humidity']}% | ☀️ {w['irradiance_raw']:.1f} W/m² | 🌬️ {w['wind_speed']} m/s
+        <div style="background-color: #1c2128; padding: 15px; border-radius: 8px; border: 1px solid #30363d;">
+            <h4 style="margin:0; color: #8b949e;">📍 ZAGREB HUB TELEMETRY</h4>
+            <h2 style="margin:0; color: #ffffff;">{datetime.now().strftime('%H:%M:%S')}</h2>
+            <p style="margin:0; color: #58a6ff;">{datetime.now().strftime('%A, %d %B %Y')}</p>
+            <hr style="margin:10px 0; border-color: #30363d;">
+            <p style="margin:0;">🌡️ Temp: <b>{w['temp']}°C</b> | 💧 Hum: <b>{w['humidity']}%</b></p>
+            <p style="margin:0;">☀️ Irrad: <b>{w['irradiance_raw']:.1f} W/m²</b> | 🌬️ Wind: <b>{w['wind_speed']} m/s</b></p>
         </div>
     """, unsafe_allow_html=True)
 
-with header_r:
-    # Source Switching Logic Visualization
-    src_colors = {"Solar (PV)": "#ffcc00", "Wind Turbine": "#00d4ff", "National Grid": "#ff4b4b"}
-    current_color = src_colors.get(source, "#ffffff")
+with top_r:
+    # نمایش منبع انرژی فعال با رنگ اختصاصی (مورد ۲)
+    colors = {"Solar (PV)": "#ffcc00", "Wind Turbine": "#00d4ff", "National Grid": "#ff4b4b"}
+    src_color = colors.get(source_name, "#ffffff")
     st.markdown(f"""
-        <div style="text-align: right; margin-top: 15px;">
-            <span style="color: #8b949e; font-size: 14px;">PRIMARY ENERGY INPUT</span><br><br>
-            <span class="source-label" style="color: {current_color}; border-color: {current_color}; background-color: {current_color}11;">
-                ● {source.upper()}
+        <div style="text-align: right;">
+            <span style="color: #8b949e;">ACTIVE ENERGY SOURCE:</span><br>
+            <span class="source-tag" style="background-color: {src_color}22; color: {src_color}; border: 1px solid {src_color}; font-size: 24px;">
+                ● {source_name.upper()}
             </span>
         </div>
     """, unsafe_allow_html=True)
 
 st.divider()
 
-# --- 5. MAIN DASHBOARD: DIVERSE CHARTS (Requirement 3 & 4) ---
-col_p, col_b, col_h = st.columns([1.2, 1, 1.2])
+# --- ۵. ردیف میانی: شاخص‌های کلیدی و نمودارهای متنوع (مورد ۳) ---
+col1, col2, col3 = st.columns([1, 1, 1.5])
 
-with col_p:
-    st.subheader("⚡ Power Distribution (kW)")
-    # Bar Chart for Power Balance
+with col1:
+    st.subheader("⚡ Power Balance")
+    # نمودار میله‌ای برای توزیع توان
     fig_power = go.Figure(go.Bar(
-        x=['Inbound', 'To Battery', 'To Electrolyzer'],
+        x=['From Source', 'To Battery', 'To Electrolyzer'],
         y=[p_available, abs(p_to_batt), p_to_elec],
-        marker_color=[current_color, '#00ffcc', '#3399ff'],
-        text=[f"{v:.2f}" for v in [p_available, abs(p_to_batt), p_to_elec]],
-        textposition='auto'
+        marker_color=[src_color, '#00ffcc', '#3399ff']
     ))
-    fig_power.update_layout(height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=20, b=20, l=0, r=0))
+    fig_power.update_layout(height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig_power, use_container_width=True)
 
-with col_b:
-    st.subheader("🔋 Battery SOC")
-    # Donut Chart for Battery
+with col2:
+    st.subheader("🔋 Storage Status")
+    # نمودار دایره‌ای برای SOC باتری
     fig_soc = go.Figure(go.Pie(
-        labels=['Charged', 'Remaining'],
-        values=[batt_status['soc'], 1 - batt_status['soc']],
+        labels=['Used', 'Available'], 
+        values=[1-batt_data['soc'], batt_data['soc']],
         hole=.7,
-        marker_colors=['#00ffcc', '#161b22'],
+        marker_colors=['#161b22', '#00ffcc'],
         showlegend=False
     ))
-    fig_soc.add_annotation(text=f"{batt_status['soc']*100:.1f}%", x=0.5, y=0.5, showarrow=False, font_size=24, font_color="white")
-    fig_soc.update_layout(height=300, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)')
+    fig_soc.add_annotation(text=f"{batt_status['soc']*100:.1f}%", x=0.5, y=0.5, showarrow=False, font_size=20)
+    fig_soc.update_layout(height=300, margin=dict(t=0, b=0), paper_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig_soc, use_container_width=True)
 
-with col_h:
-    st.subheader("🧪 Production & Pressure")
-    # Line Chart for Pressure History
-    new_entry = {
-        'Time': datetime.now().strftime('%H:%M:%S'),
-        'Pressure': logistics['pressure_bar'],
-        'H2_Rate': h2_kg_h * 100
-    }
-    st.session_state.history = pd.concat([st.session_state.history, pd.DataFrame([new_entry])], ignore_index=True).iloc[-30:]
+with col3:
+    st.subheader("🧪 H2 Production & Pressure")
+    # نمودار خطی فشار تانک
+    new_entry = {'Time': datetime.now().strftime('%H:%M:%S'), 'Pressure': logistics['pressure_bar'], 'H2_Rate': elec_out['h2_kg_h']}
+    st.session_state.history = pd.concat([st.session_state.history, pd.DataFrame([new_entry])], ignore_index=True).iloc[-20:]
     
     fig_h2 = go.Figure()
-    fig_h2.add_trace(go.Scatter(x=st.session_state.history['Time'], y=st.session_state.history['Pressure'], 
-                                name="Tank Pressure", line=dict(color='#3399ff', width=3), fill='tozeroy'))
-    fig_h2.update_layout(height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=20, b=20, l=0, r=0))
+    fig_h2.add_trace(go.Scatter(x=st.session_state.history['Time'], y=st.session_state.history['Pressure'], name="Pressure (bar)", line=dict(color='#3399ff', width=3)))
+    fig_h2.update_layout(height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig_h2, use_container_width=True)
 
-# --- 6. INDUSTRIAL KPI GRID ---
-st.subheader("🛠️ Asset Diagnostics & Economics")
-kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+# --- ۶. ردیف پایینی: جزئیات لجستیک و سلامت (مورد ۴) ---
+st.subheader("⚙️ Industrial Asset Diagnostics")
+bot1, bot2, bot3, bot4 = st.columns(4)
 
-kpi1.metric("Stack Health (SOH)", f"{elec_metrics['soh']:.2%}", delta="-0.01% Cycle")
-kpi2.metric("Hydrogen Purity", f"{elec_metrics['purity']:.4f}%", "Optimal")
-kpi3.metric("Live LCOH", f"€ {eco['lcoh']:.2f}", f"{eco['lcoh']-4.5:.2f} delta")
-kpi4.metric("CO2 Abated", f"{eco['net_co2_kg']:.2f} kg")
+bot1.metric("Electrolyzer SOH", f"{elec_out['soh']:.2%}", delta="-0.01% daily")
+bot2.metric("Gas Purity", f"{elec_out['purity']:.4f}%", "Optimal")
+bot3.metric("Water Demand", f"{elec_out['water_l_h']:.2f} L/h")
+bot4.metric("Tank Temp", f"{logistics['temp_c']:.1f} °C")
 
-# Simulation Timing
+# تکرار حلقه
 time.sleep(Config.TIMESTEP_SEC)
 st.rerun()
