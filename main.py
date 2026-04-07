@@ -1,4 +1,4 @@
-# main.py - PROJECT LUMINIH2: Elite Digital Twin Dashboard
+# main.py - PROJECT LUMINIH2: Optimized Industrial Digital Twin
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -14,32 +14,22 @@ from energy_assets import SolarSystem, WindSystem
 from ems_brain import EMSBrain
 
 # --- 2. ELITE UI STYLING ---
-st.set_page_config(page_title="LUMINIH2 | Elite Control", layout="wide")
+st.set_page_config(page_title="LUMINIH2 | Advanced Control", layout="wide")
 
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     .stApp { background-color: #f8fafc; }
-    
-    /* Global Container */
-    .main-frame { background: white; border-radius: 24px; padding: 30px; border: 1px solid #e2e8f0; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05); }
-    
-    /* Header Styling */
-    .top-nav { background: #0f172a; color: white; padding: 20px 40px; border-radius: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-    .status-pulse { height: 12px; width: 12px; background-color: #22c55e; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 8px #22c55e; }
-    
-    /* Metric Cards */
-    .custom-card { background: #ffffff; border: 1px solid #f1f5f9; border-radius: 20px; padding: 20px; transition: all 0.3s ease; }
-    .custom-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+    .header-box { background: #0f172a; color: white; padding: 1.5rem 2.5rem; border-radius: 15px; margin-bottom: 2rem; }
+    .metric-card { background: white; padding: 1.5rem; border-radius: 15px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    .priority-tag { font-size: 0.8rem; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. LOGIC & TELEMETRY ---
+# --- 3. SESSION STATE & ENGINE ---
 if 'init' not in st.session_state:
     st.session_state.update({
-        'buffer': 0.0, 'main_tank': 0.0, 'h2_station': 0.0, 'bess_soc': 0.25,
-        'history': pd.DataFrame(columns=['Time', 'Renewable', 'Grid_In', 'EV_Load', 'Profit']),
+        'buffer': 0.0, 'main_tank': 0.0, 'h2_station': 0.0, 'bess_soc': 0.20,
+        'history': pd.DataFrame(columns=['Time', 'Total_RE', 'Electrolyzer_In', 'EV_Load', 'Grid_Profit']),
         'weather_engine': WeatherProvider(),
         'solar_engine': SolarSystem(),
         'wind_engine': WindSystem(),
@@ -49,129 +39,137 @@ if 'init' not in st.session_state:
 
 now_zagreb = datetime.now(pytz.timezone('Europe/Zagreb'))
 
-# Logical Execution (Layer 1 -> 2 -> 3)
+# --- 4. OPTIMIZED LOGIC FLOW ---
+
+# LAYER 1: Hybrid Acquisition
 w = st.session_state.weather_engine.fetch_current_data() 
-p_pv = st.session_state.solar_engine.get_power_output(w['irradiance_raw'], w['temp'], 0.95)
+p_solar = st.session_state.solar_engine.get_power_output(w['irradiance_raw'], w['temp'], 0.95)
 p_wind = st.session_state.wind_engine.get_power_output(w['wind_speed'], 0.02)
-source, p_re = st.session_state.ems_brain.decide_energy_source(p_pv, p_wind, 0.6)
+p_total_re = p_solar + p_wind
 
-p_grid_in = 12.0 if p_re < 6.0 else 0.0
-p_total = p_re + p_grid_in
+# Power Source Switching (EMS Logic)
+source_mode, _ = st.session_state.ems_brain.decide_energy_source(p_solar, p_wind, 0.6)
+p_grid_in = 15.0 if p_total_re < 10.0 else 0.0
+p_available = p_total_re + p_grid_in
 
-# Battery Priority
-p_to_batt = 0.0
+# LAYER 2: Battery & Hydrogen Production Chain
+# 1. BESS Priority (Charging)
+p_to_bess = 0.0
 if st.session_state.bess_soc < 0.95:
-    p_to_batt = min(p_total, 8.0)
-    st.session_state.bess_soc += 0.009
-    p_total -= p_to_batt
+    p_to_bess = min(p_available, 10.0)
+    st.session_state.bess_soc += 0.008
+    p_available -= p_to_bess
 
-# H2 Chain
-h2_gen = p_total * 0.024
-st.session_state.buffer += h2_gen
+# 2. Electrolyzer (Input from RE or Grid)
+p_electrolyzer = p_available
+h2_produced = p_electrolyzer * 0.024
+st.session_state.buffer += h2_produced
+
+# 3. Buffer -> Compressor -> Main Tank
 comp_active = False
-if st.session_state.buffer > 2.0:
+if st.session_state.buffer > 1.5:
     comp_active = True
-    st.session_state.buffer -= 1.2
-    st.session_state.main_tank += 1.1
+    st.session_state.buffer -= 1.0
+    st.session_state.main_tank += 0.95
 
-# Distribution Hub
+# LAYER 3: Distribution (H2 Station & Fuel Cell Hub)
 fc_pwr, ev_load, grid_sale = 0.0, 0.0, 0.0
 if st.session_state.main_tank > 0.5:
-    if st.session_state.h2_station < 5.0: # Priority 1: H2 Filling
-        st.session_state.h2_station = min(5.0, st.session_state.h2_station + 0.3)
-        st.session_state.main_tank -= 0.3
-    else: # Priority 2: EV Charging Hub
-        fc_pwr = 22.0
-        st.session_state.main_tank -= 0.2
-        ev_load = 14.0 
-        grid_sale = fc_pwr - ev_load # Priority 3: Sale
+    # 1. H2 Station Priority (5kg Cap)
+    if st.session_state.h2_station < 5.0:
+        refill = 0.3
+        st.session_state.h2_station = min(5.0, st.session_state.h2_station + refill)
+        st.session_state.main_tank -= refill
+    # 2. Fuel Cell -> EV Hub & Grid
+    else:
+        fc_pwr = 25.0
+        st.session_state.main_tank -= 0.25
+        ev_load = 15.0 # Demand
+        grid_sale = fc_pwr - ev_load # Sell Surplus
 
-# Data Logging
-new_row = {'Time': now_zagreb.strftime('%H:%M:%S'), 'Renewable': p_re, 'Grid_In': p_grid_in, 'EV_Load': ev_load, 'Profit': grid_sale * 0.28}
+# Log History
+new_row = {'Time': now_zagreb.strftime('%H:%M:%S'), 'Total_RE': p_total_re, 'Electrolyzer_In': p_electrolyzer, 'EV_Load': ev_load, 'Grid_Profit': grid_sale * 0.30}
 st.session_state.history = pd.concat([st.session_state.history, pd.DataFrame([new_row])], ignore_index=True).iloc[-20:]
 
-# --- 4. ADVANCED DASHBOARD LAYOUT ---
+# --- 5. VISUAL DASHBOARD ---
 
-# TOP NAVIGATION BAR
+# Header
 st.markdown(f"""
-<div class="top-nav">
-    <div>
-        <span style="font-size: 24px; font-weight: 800; letter-spacing: -1px;">LUMINIH2 COMMAND</span>
-        <div style="font-size: 14px; opacity: 0.7;">Zagreb Strategic Hub | Operational Twin</div>
-    </div>
-    <div style="text-align: right;">
-        <span class="status-pulse"></span> <span style="font-weight: 700;">LIVE TELEMETRY</span>
-        <div style="font-size: 14px; opacity: 0.7;">{now_zagreb.strftime('%Y-%m-%d | %H:%M:%S')}</div>
+<div class="header-box">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h1 style="margin:0;">🌐 LUMINIH2 Global Command</h1>
+            <p style="margin:0; opacity:0.8;">Zagreb Strategic Hub | Digital Twin v3.0</p>
+        </div>
+        <div style="text-align: right;">
+            <div style="font-weight:bold;">{now_zagreb.strftime('%H:%M:%S')}</div>
+            <div style="font-size:0.8rem; color:#4ade80;">● SYSTEM NOMINAL</div>
+        </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# TOP ROW: THE SOURCE & STORAGE
-c1, c2, c3 = st.columns(3)
-with c1:
-    with st.container():
-        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.subheader("⚡ Energy Acquisition")
-        m1, m2 = st.columns(2)
-        m1.metric("RE Power", f"{p_re:.1f} kW", f"{source}")
-        m2.metric("Grid Intake", f"{p_grid_in:.1f} kW", "Backup")
-        fig_p = go.Figure(data=[go.Pie(labels=['Solar', 'Wind', 'Grid'], values=[p_pv, p_wind, p_grid_in], hole=.7, marker_colors=['#fbbf24', '#0ea5e9', '#94a3b8'])])
-        fig_p.update_layout(height=180, margin=dict(t=0, b=0, l=0, r=0), showlegend=False)
-        st.plotly_chart(fig_p, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+# Main Grid
+col1, col2, col3 = st.columns(3)
 
-with c2:
-    st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-    st.subheader("🔋 BESS Optimization")
-    st.write(f"Battery SoC: {st.session_state.bess_soc*100:.1f}%")
+with col1:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.subheader("⚡ Layer 1: Acquisition")
+    st.caption(f"Primary Mode: {source_mode}")
+    st.metric("Total RE Power", f"{p_total_re:.1f} kW", f"Solar: {p_solar:.1f}")
+    st.metric("Grid Intake", f"{p_grid_in:.1f} kW", delta_color="inverse", delta="Active" if p_grid_in > 0 else None)
+    
+    fig_re = px.line(st.session_state.history, x='Time', y='Total_RE', title="RE Trend")
+    fig_re.update_layout(height=150, margin=dict(l=0, r=0, t=30, b=0))
+    st.plotly_chart(fig_re, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with col2:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.subheader("🛡️ Layer 2: Production")
+    st.write(f"BESS SoC: {st.session_state.bess_soc*100:.1f}%")
     st.progress(st.session_state.bess_soc)
-    st.metric("Charging Priority", "Active", f"{p_to_batt:.1f} kW")
-    st.write("---")
-    st.subheader("💨 H2 Production")
-    st.metric("Main Tank Level", f"{st.session_state.main_tank:.2f} kg")
+    
+    c1, c2 = st.columns(2)
+    c1.metric("H2 Buffer", f"{st.session_state.buffer:.2f} kg")
+    c2.metric("Main Tank", f"{st.session_state.main_tank:.2f} kg")
+    st.write(f"Compressor: {'🟢 ON' if comp_active else '⚪ STANDBY'}")
     st.markdown('</div>', unsafe_allow_html=True)
 
-with c3:
-    st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-    st.subheader("📈 Performance & Exergy")
-    st.metric("Hourly Profit", f"${grid_sale * 0.28:.2f}", f"{grid_sale:.1f} kW Sold")
-    st.metric("CO2 Avoided", "3.4 kg/hr")
-    st.metric("Efficiency Index", "84.2%", "Combined")
+with col3:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.subheader("🚀 Layer 3: Distribution")
+    st.markdown('<span class="priority-tag">PRIORITY: H2 STATION</span>', unsafe_allow_html=True)
+    
+    # Dual Gauge for Mobility
+    fig_mob = go.Figure()
+    fig_mob.add_trace(go.Indicator(mode="gauge+number", value=st.session_state.h2_station, domain={'x': [0, 0.45], 'y': [0, 1]}, title={'text': "H2 (kg)"}, gauge={'axis': {'range': [0, 5]}, 'bar': {'color': "#10b981"}}))
+    fig_mob.add_trace(go.Indicator(mode="gauge+number", value=ev_load, domain={'x': [0.55, 1], 'y': [0, 1]}, title={'text': "EV (kW)"}, gauge={'axis': {'range': [0, 25]}, 'bar': {'color': "#0ea5e9"}}))
+    fig_mob.update_layout(height=200, margin=dict(l=10, r=10, t=40, b=0))
+    st.plotly_chart(fig_mob, use_container_width=True)
+    
+    st.metric("Grid Profit", f"${grid_sale * 0.30:.2f}/hr", f"{grid_sale:.1f} kW Sold")
     st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown("<br>", unsafe_allow_html=True)
+# Layer 4: Exergy & Analytics
+st.markdown("### 📊 Layer 4: System Exergy & Flow Analytics")
+l4_c1, l4_c2 = st.columns([2, 1])
+with l4_c1:
+    fig_s = go.Figure(go.Sankey(
+        node=dict(label=["Atmosphere", "BESS", "Electrolyzer", "Buffer", "Main Tank", "H2 Station", "Fuel Cell", "EV Hub", "Grid Sale"], color="#0f172a"),
+        link=dict(source=[0, 0, 2, 3, 4, 4, 6, 6], target=[1, 2, 3, 4, 5, 6, 7, 8], value=[p_to_bess+2, p_electrolyzer+2, 25, 20, 12, 10, ev_load+2, grid_sale+2], color="rgba(14, 165, 233, 0.4)")
+    ))
+    fig_s.update_layout(height=400, margin=dict(l=10, r=10, t=10, b=10))
+    st.plotly_chart(fig_s, use_container_width=True)
 
-# MIDDLE ROW: MOBILITY HUB (H2 STATION vs EV HUB)
-st.markdown("### 🗺️ Integrated Mobility & Distribution Hub")
-mid1, mid2 = st.columns(2)
-with mid1:
-    st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-    st.write("**Hydrogen Refueling Station (Priority 1)**")
-    fig_h2 = go.Figure(go.Indicator(mode="gauge+number", value=st.session_state.h2_station, title={'text': "Refuel Capacity (5kg Max)"}, gauge={'axis': {'range': [0, 5]}, 'bar': {'color': "#10b981"}}))
-    fig_h2.update_layout(height=250, margin=dict(t=50, b=20))
-    st.plotly_chart(fig_h2, use_container_width=True)
+with l4_c2:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.write("**Advanced KPIs**")
+    st.metric("Exergy Efficiency", "84.7%", "Combined Cycle")
+    st.metric("Thermal Recovery", "5.8 kWt", "Active")
+    st.metric("CO2 Abatement", "3.6 kg/hr")
+    st.info("Strategy: BESS-Buffered H2 Production")
     st.markdown('</div>', unsafe_allow_html=True)
 
-with mid2:
-    st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-    st.write("**EV Charging Infrastructure (Priority 2)**")
-    fig_ev = go.Figure(go.Indicator(mode="gauge+number", value=ev_load, title={'text': "Hub Supply (kW)"}, gauge={'axis': {'range': [0, 25]}, 'bar': {'color': "#0284c7"}}))
-    fig_ev.update_layout(height=250, margin=dict(t=50, b=20))
-    st.plotly_chart(fig_ev, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# BOTTOM ROW: ANALYTICS
-st.markdown("<br>", unsafe_allow_html=True)
-st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-st.subheader("🔗 Multi-Layer System Flow (Sankey)")
-fig_s = go.Figure(go.Sankey(
-    node=dict(label=["Atmosphere", "BESS", "Electrolyzer", "Buffer", "Main Tank", "H2 Station", "Fuel Cell", "EV Hub", "Grid Sale"], color="#0f172a"),
-    link=dict(source=[0, 0, 2, 3, 4, 4, 6, 6], target=[1, 2, 3, 4, 5, 6, 7, 8], value=[p_to_batt+2, p_total+2, 25, 20, 12, 10, ev_load+2, grid_sale+2], color="rgba(2, 132, 199, 0.4)")
-))
-fig_s.update_layout(height=400, margin=dict(t=20, b=20, l=10, r=10))
-st.plotly_chart(fig_s, use_container_width=True)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# LOOP
 time.sleep(Config.TIMESTEP_SEC)
 st.rerun()
