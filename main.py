@@ -1,17 +1,19 @@
-# main.py (Zagreb Integrated Multi-Energy Hub - Strategic Edition)
-# Version: 7.0 | Full Roadmap Integration (EV, Fuel Cell, Heat Recovery)
-
+# main.py (Zagreb H2 Hub - Phase 1: Environmental & Source Switching)
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from datetime import datetime
 import time
 import pytz 
 
+# ایمپورت ماژول‌های پروژه (فرضی بر اساس ساختار قبلی شما)
+from config import Config
+from weather_api import WeatherProvider
+from energy_assets import SolarSystem, WindSystem
+from ems_brain import EMSBrain
+
 # --- ۱. تنظیمات ظاهری (Clean Light Theme) ---
-st.set_page_config(page_title="H2 Hub Zagreb | Integrated Control Room", layout="wide")
+st.set_page_config(page_title="H2 Hub Zagreb | Source Control", layout="wide")
 
 st.markdown("""
     <style>
@@ -23,116 +25,114 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- ۲. مقداردهی اولیه و شبیه‌سازی منطق نقشه راه ---
+# --- ۲. مقداردهی اولیه سیستم ---
 if 'init' not in st.session_state:
-    st.session_state.history = pd.DataFrame()
+    st.session_state.weather = WeatherProvider()
+    st.session_state.brain = EMSBrain()
+    st.session_state.history = pd.DataFrame(columns=['Time', 'Solar', 'Wind', 'Source'])
     st.session_state.init = True
 
+# تنظیم منطقه زمانی زاگرب
 zagreb_tz = pytz.timezone('Europe/Zagreb')
 now_zagreb = datetime.now(zagreb_tz)
 
-# پارامترهای فرضی (برای نمایش در داشبورد - در نسخه نهایی از کلاس‌های شما خوانده می‌شود)
-p_solar, p_wind = 45.5, 12.8  # kW
-soc_battery = 0.65            # 65%
-h2_prod_rate = 1.2            # kg/h
-tank_pressure = 185           # bar
-fuel_cell_power = 5.5         # kW (تولید از هیدروژن مازاد)
-ev_load = 4.2                 # kW (بار ایستگاه شارژ خودرو برقی)
-heat_recovered = 3.4          # kWt (گرما بازیافتی)
+# تنظیمات بصری نمودارها
+plotly_layout = dict(
+    height=300, template="plotly_white", paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=30, b=30, l=0, r=0),
+    font=dict(color='#1e293b')
+)
 
-# ذخیره تاریخچه برای نمودارها
-new_entry = {'Time': now_zagreb.strftime('%H:%M:%S'), 'P': tank_pressure, 'EV': ev_load, 'FC': fuel_cell_power}
+# --- ۳. دریافت داده‌های محیطی و محاسبات سوئیچینگ ---
+w = st.session_state.weather.fetch_current_data()
+p_pv = SolarSystem().get_power_output(w['irradiance_raw'], w['temp'], w['soiling_factor'])
+p_wind = WindSystem().get_power_output(w['wind_speed'], w['turbulence'])
+
+# منطق سوئیچینگ: اولویت با خورشید، سپس باد و در نهایت شبکه
+source_name, p_available = st.session_state.brain.decide_energy_source(p_pv, p_wind, soc=0.5) # SOC فرضی برای فاز ۱
+
+# ذخیره در تاریخچه برای نمودارهای خطی
+new_entry = {
+    'Time': now_zagreb.strftime('%H:%M:%S'),
+    'Solar': p_pv,
+    'Wind': p_wind,
+    'Source': source_name
+}
 st.session_state.history = pd.concat([st.session_state.history, pd.DataFrame([new_entry])], ignore_index=True).iloc[-20:]
 
-# --- ۳. هدر سیستم و منبع انرژی فعال ---
-t_l, t_r = st.columns([1, 2])
-with t_l:
-    st.markdown(f"""<div class="status-card">
-        <h4 style="margin:0; color: #64748b;">📍 ZAGREB INTEGRATED HUB</h4>
-        <h2 style="margin:0;">{now_zagreb.strftime('%H:%M:%S')}</h2>
-        <p style="margin:0; color: #0ea5e9;">Priority: <b>Electrolyzer (Optimized)</b></p>
-    </div>""", unsafe_allow_html=True)
+# --- ۴. نمایش لایه ۱: ورودی‌های محیطی زاگرب ---
+st.header("🌐 Layer 1: Atmospheric Inputs & AI Source Switching")
 
-with t_r:
-    st.markdown(f"""<div style="text-align: right; margin-top: 10px;">
-        <span style="color: #64748b; font-size: 13px;">AI PREDICTED STATUS:</span><br>
-        <span class="source-tag" style="background-color: #10b98115; color: #10b981; border: 2px solid #10b981; font-size: 20px;">
-            ● STABLE PRODUCTION & EV CHARGING ACTIVE
-        </span>
-    </div>""", unsafe_allow_html=True)
+top_col1, top_col2, top_col3 = st.columns(3)
+
+with top_col1:
+    st.metric("Solar Irradiance", f"{w['irradiance_raw']:.1f} W/m²", delta=f"{w['temp']} °C")
+    st.write("**Solar Power Potential (kW)**")
+    st.line_chart(st.session_state.history.set_index('Time')['Solar'], height=120, use_container_width=True)
+
+with top_col2:
+    st.metric("Wind Speed", f"{w['wind_speed']:.1f} m/s", delta="Stable" if w['turbulence'] < 0.1 else "Turbulent")
+    st.write("**Wind Power Potential (kW)**")
+    st.line_chart(st.session_state.history.set_index('Time')['Wind'], height=120, use_container_width=True)
+
+with top_col3:
+    reliability = 100 - (w['turbulence'] * 100)
+    st.markdown(f"""
+        <div class="status-card">
+            <h4 style="margin:0; color: #64748b; font-size: 13px;">📍 ZAGREB TELEMETRY</h4>
+            <h2 style="margin:0; font-weight: 800;">{now_zagreb.strftime('%H:%M:%S')}</h2>
+            <hr style="margin:10px 0; border-color: #e2e8f0;">
+            <p style="margin:0; font-size: 14px;">Source Reliability: <b>{reliability:.1f}%</b></p>
+            <p style="margin:0; font-size: 14px; color: #0ea5e9;">AI Forecast: <b>Stable Production</b></p>
+        </div>
+    """, unsafe_allow_html=True)
 
 st.divider()
 
-# --- ۴. ردیف اول: زنجیره تولید و ذخیره‌سازی هیدروژن (مطابق نقشه راه) ---
-st.subheader("🛠️ Hydrogen Production & Storage Chain")
-c1, c2, c3, c4 = st.columns(4)
+# --- ۵. نمایش منطق سوئیچینگ توان (Active Source) ---
+logic_col1, logic_col2 = st.columns([2, 1])
 
-with c1:
-    st.write("**1. Electrolyzer S30**")
-    st.metric("H2 Production", f"{h2_prod_rate} kg/h", "SOH: 98.5%")
-with c2:
-    st.write("**2. Buffer & Compressor**")
-    st.progress(0.45) # سطح بافر
-    st.caption("Buffer Level: 45%")
-with c3:
-    st.write("**3. High-Pressure Storage**")
-    st.metric("Tank Pressure", f"{tank_pressure} bar", f"{tank_pressure-180} delta")
-with c4:
-    st.write("**4. H2 Refueling Station**")
-    st.metric("Dispenser Status", "READY", "5kg Tank Sync")
-
-# --- ۵. ردیف دوم: نمودارهای یکپارچه (EV Station & Fuel Cell) ---
-st.divider()
-col_ev, col_fc = st.columns(2)
-
-with col_ev:
-    st.subheader("🚗 EV Charging Station (Powered by FC/Grid)")
-    fig_ev = go.Figure()
-    fig_ev.add_trace(go.Scatter(x=st.session_state.history['Time'], y=st.session_state.history['EV'], 
-                                fill='tozeroy', line=dict(color='#8b5cf6', width=3), name="EV Load (kW)"))
-    fig_ev.update_layout(height=250, template="plotly_white", margin=dict(t=20, b=20, l=0, r=0))
-    st.plotly_chart(fig_ev, use_container_width=True)
-    st.caption("برق خروجی از پیل سوختی ابتدا به این ایستگاه هدایت می‌شود.")
-
-with col_fc:
-    st.subheader("🔋 Fuel Cell & Grid Interaction")
-    # نمودار تعامل پیل سوختی و تزریق به شبکه
-    fig_fc = go.Figure(go.Bar(
-        x=['Fuel Cell Out', 'EV Demand', 'Grid Export'],
-        y=[fuel_cell_power, ev_load, max(0, fuel_cell_power - ev_load)],
-        marker_color=['#10b981', '#8b5cf6', '#3b82f6']
+with logic_col1:
+    st.subheader("🔌 Active Power Source Allocation")
+    
+    # آماده‌سازی داده برای نمودار میله‌ای سوئیچینگ
+    y_vals = [
+        p_pv if source_name == "Solar (PV)" else 0,
+        p_wind if source_name == "Wind Turbine" else 0,
+        p_available if source_name == "National Grid" else 0
+    ]
+    
+    fig_switch = go.Figure(go.Bar(
+        x=['Solar PV', 'Wind Turbine', 'National Grid'],
+        y=y_vals,
+        marker_color=['#f59e0b', '#0ea5e9', '#ef4444'],
+        text=[f"{v:.1f} kW" if v > 0 else "" for v in y_vals],
+        textposition='outside'
     ))
-    fig_fc.update_layout(height=250, template="plotly_white", margin=dict(t=20, b=20, l=0, r=0))
-    st.plotly_chart(fig_fc, use_container_width=True)
+    fig_switch.update_layout(**plotly_layout, yaxis_title="Allocated Power (kW)")
+    st.plotly_chart(fig_switch, use_container_width=True)
 
-# --- ۶. ردیف سوم: بازیافت حرارت و راندمان کل (Heat Recovery) ---
-st.divider()
-st.subheader("♻️ Waste Heat Recovery & Efficiency")
-h1, h2, h3 = st.columns(3)
+with logic_col2:
+    st.subheader("💡 System Decision")
+    
+    # نمایش کارت وضعیت منبع فعلی
+    colors = {"Solar (PV)": "#f59e0b", "Wind Turbine": "#0ea5e9", "National Grid": "#ef4444"}
+    src_color = colors.get(source_name, "#1e293b")
+    
+    st.markdown(f"""
+        <div style="background-color: {src_color}10; border: 2px solid {src_color}; padding: 20px; border-radius: 10px; text-align: center;">
+            <p style="margin:0; color: #64748b; font-size: 12px; font-weight: bold;">CURRENT FEED</p>
+            <h3 style="margin:5px 0; color: {src_color};">{source_name.upper()}</h3>
+            <p style="margin:0; font-size: 18px; font-weight: bold;">{p_available:.2f} kW</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.write("")
+    if source_name == "National Grid":
+        st.error("RE Sources insufficient. Grid bypass active.")
+    else:
+        st.success("Operating on 100% Renewable Energy.")
 
-with h1:
-    st.metric("Recovered Thermal Power", f"{heat_recovered} kWt", "from Electrolyzer/FC")
-    st.caption("سیستم بازیابی حرارت باعث بهبود راندمان کل شده است.")
-with h2:
-    st.write("**Total System Efficiency**")
-    st.info(f"Combined P+T Efficiency: 74.2%") # برق + حرارت
-with h3:
-    st.metric("CO2 Avoided", "12.4 kg/day", "Green H2 Tracking")
-
-# --- ۷. ردیف پایینی: نقشه جریان انرژی (Sankey نهایی) ---
-with st.expander("📊 Full System Energy & H2 Mapping"):
-    fig_sankey = go.Figure(go.Sankey(
-        node=dict(pad=15, thickness=20, 
-                  label=["PV/Wind", "BESS", "Electrolyzer", "H2 Station", "Fuel Cell", "EV Station", "Grid Export"],
-                  color="#0ea5e9"),
-        link=dict(
-            source=[0, 0, 2, 2, 4, 4], # From
-            target=[1, 2, 3, 4, 5, 6], # To
-            value=[15, 45, 30, 15, 10, 5]  # Values
-        )
-    ))
-    st.plotly_chart(fig_sankey, use_container_width=True)
-
-# تکرار شبیه‌سازی
-time.sleep(5)
+# تکرار شبیه‌سازی بر اساس گام زمانی تعریف شده
+time.sleep(Config.TIMESTEP_SEC)
 st.rerun()
