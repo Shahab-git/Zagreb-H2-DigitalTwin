@@ -1,138 +1,120 @@
-# main.py (Zagreb H2 Hub - Phase 1: Environmental & Source Switching)
+# main.py - Zagreb H2 Hub Full Roadmap Integration
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 import time
-import pytz 
+import pytz
 
-# ایمپورت ماژول‌های پروژه (فرضی بر اساس ساختار قبلی شما)
+# فرض بر برقرار بودن ماژول‌های زیر
 from config import Config
 from weather_api import WeatherProvider
-from energy_assets import SolarSystem, WindSystem
+from energy_assets import SolarSystem, WindSystem, BatteryBESS
+from hydrogen_assets import ElectrolyzerS30, HydrogenStorageChain
 from ems_brain import EMSBrain
 
-# --- ۱. تنظیمات ظاهری (Clean Light Theme) ---
-st.set_page_config(page_title="H2 Hub Zagreb | Source Control", layout="wide")
-
+# --- ۱. تنظیمات ظاهری ---
+st.set_page_config(page_title="Zagreb Integrated H2 Hub", layout="wide")
 st.markdown("""
     <style>
-    .main { background-color: #ffffff; color: #1e293b; }
-    .stMetric { background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 5px solid #0ea5e9; border-radius: 8px; padding: 10px; }
-    .status-card { background-color: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .source-tag { padding: 5px 15px; border-radius: 20px; font-weight: bold; font-family: 'Segoe UI', sans-serif; }
-    h1, h2, h3, h4, p, span { color: #1e293b !important; }
+    .main { background-color: #ffffff; }
+    .stMetric { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; }
+    .layer-header { background-color: #0ea5e9; color: white; padding: 10px; border-radius: 5px; margin-top: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- ۲. مقداردهی اولیه سیستم ---
+# --- ۲. مدیریت وضعیت سیستم (Session State) ---
 if 'init' not in st.session_state:
-    st.session_state.weather = WeatherProvider()
-    st.session_state.brain = EMSBrain()
-    st.session_state.history = pd.DataFrame(columns=['Time', 'Solar', 'Wind', 'Source'])
+    st.session_state.battery = BatteryBESS() # فرض بر وجود کلاس
+    st.session_state.history = pd.DataFrame()
+    st.session_state.buffer_level = 0.0
+    st.session_state.main_tank_kg = 0.0
+    st.session_state.h2_station_kg = 0.0
     st.session_state.init = True
 
-# تنظیم منطقه زمانی زاگرب
-zagreb_tz = pytz.timezone('Europe/Zagreb')
-now_zagreb = datetime.now(zagreb_tz)
+now_zagreb = datetime.now(pytz.timezone('Europe/Zagreb'))
 
-# تنظیمات بصری نمودارها
-plotly_layout = dict(
-    height=300, template="plotly_white", paper_bgcolor='rgba(0,0,0,0)',
-    plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=30, b=30, l=0, r=0),
-    font=dict(color='#1e293b')
-)
+# --- ۳. دریافت داده‌ها و منطق لایه‌بندی شده (Simulation Logic) ---
+w = WeatherProvider().fetch_current_data()
+p_pv = SolarSystem().get_power_output(w['irradiance_raw'], w['temp'], 0.9)
+p_wind = WindSystem().get_power_output(w['wind_speed'], 0.05)
 
-# --- ۳. دریافت داده‌های محیطی و محاسبات سوئیچینگ ---
-w = st.session_state.weather.fetch_current_data()
-p_pv = SolarSystem().get_power_output(w['irradiance_raw'], w['temp'], w['soiling_factor'])
-p_wind = WindSystem().get_power_output(w['wind_speed'], w['turbulence'])
+# لایه ۱: سوئیچینگ قدرت
+source_name, p_total = EMSBrain().decide_energy_source(p_pv, p_wind, 0.5)
 
-# منطق سوئیچینگ: اولویت با خورشید، سپس باد و در نهایت شبکه
-source_name, p_available = st.session_state.brain.decide_energy_source(p_pv, p_wind, soc=0.5) # SOC فرضی برای فاز ۱
+# لایه ۲: اولویت باتری و سپس الکترولایزر
+p_to_battery = min(p_total, 10.0) # فرض: حداکثر ۱۰ کیلووات برای شارژ باتری
+p_to_electrolyzer = max(0, p_total - p_to_battery)
 
-# ذخیره در تاریخچه برای نمودارهای خطی
-new_entry = {
-    'Time': now_zagreb.strftime('%H:%M:%S'),
-    'Solar': p_pv,
-    'Wind': p_wind,
-    'Source': source_name
-}
-st.session_state.history = pd.concat([st.session_state.history, pd.DataFrame([new_entry])], ignore_index=True).iloc[-20:]
+# شبیه‌سازی تولید هیدروژن و بافر
+h2_gen = p_to_electrolyzer * 0.02 # ضریب فرضی تولید
+st.session_state.buffer_level += h2_gen
+compressor_active = False
+if st.session_state.buffer_level > 5.0: # حد آستانه بافر
+    compressor_active = True
+    st.session_state.buffer_level -= 2.0
+    st.session_state.main_tank_kg += 1.8
 
-# --- ۴. نمایش لایه ۱: ورودی‌های محیطی زاگرب ---
-st.header("🌐 Layer 1: Atmospheric Inputs & AI Source Switching")
-
-top_col1, top_col2, top_col3 = st.columns(3)
-
-with top_col1:
-    st.metric("Solar Irradiance", f"{w['irradiance_raw']:.1f} W/m²", delta=f"{w['temp']} °C")
-    st.write("**Solar Power Potential (kW)**")
-    st.line_chart(st.session_state.history.set_index('Time')['Solar'], height=120, use_container_width=True)
-
-with top_col2:
-    st.metric("Wind Speed", f"{w['wind_speed']:.1f} m/s", delta="Stable" if w['turbulence'] < 0.1 else "Turbulent")
-    st.write("**Wind Power Potential (kW)**")
-    st.line_chart(st.session_state.history.set_index('Time')['Wind'], height=120, use_container_width=True)
-
-with top_col3:
-    reliability = 100 - (w['turbulence'] * 100)
-    st.markdown(f"""
-        <div class="status-card">
-            <h4 style="margin:0; color: #64748b; font-size: 13px;">📍 ZAGREB TELEMETRY</h4>
-            <h2 style="margin:0; font-weight: 800;">{now_zagreb.strftime('%H:%M:%S')}</h2>
-            <hr style="margin:10px 0; border-color: #e2e8f0;">
-            <p style="margin:0; font-size: 14px;">Source Reliability: <b>{reliability:.1f}%</b></p>
-            <p style="margin:0; font-size: 14px; color: #0ea5e9;">AI Forecast: <b>Stable Production</b></p>
-        </div>
-    """, unsafe_allow_html=True)
-
-st.divider()
-
-# --- ۵. نمایش منطق سوئیچینگ توان (Active Source) ---
-logic_col1, logic_col2 = st.columns([2, 1])
-
-with logic_col1:
-    st.subheader("🔌 Active Power Source Allocation")
-    
-    # آماده‌سازی داده برای نمودار میله‌ای سوئیچینگ
-    y_vals = [
-        p_pv if source_name == "Solar (PV)" else 0,
-        p_wind if source_name == "Wind Turbine" else 0,
-        p_available if source_name == "National Grid" else 0
-    ]
-    
-    fig_switch = go.Figure(go.Bar(
-        x=['Solar PV', 'Wind Turbine', 'National Grid'],
-        y=y_vals,
-        marker_color=['#f59e0b', '#0ea5e9', '#ef4444'],
-        text=[f"{v:.1f} kW" if v > 0 else "" for v in y_vals],
-        textposition='outside'
-    ))
-    fig_switch.update_layout(**plotly_layout, yaxis_title="Allocated Power (kW)")
-    st.plotly_chart(fig_switch, use_container_width=True)
-
-with logic_col2:
-    st.subheader("💡 System Decision")
-    
-    # نمایش کارت وضعیت منبع فعلی
-    colors = {"Solar (PV)": "#f59e0b", "Wind Turbine": "#0ea5e9", "National Grid": "#ef4444"}
-    src_color = colors.get(source_name, "#1e293b")
-    
-    st.markdown(f"""
-        <div style="background-color: {src_color}10; border: 2px solid {src_color}; padding: 20px; border-radius: 10px; text-align: center;">
-            <p style="margin:0; color: #64748b; font-size: 12px; font-weight: bold;">CURRENT FEED</p>
-            <h3 style="margin:5px 0; color: {src_color};">{source_name.upper()}</h3>
-            <p style="margin:0; font-size: 18px; font-weight: bold;">{p_available:.2f} kW</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.write("")
-    if source_name == "National Grid":
-        st.error("RE Sources insufficient. Grid bypass active.")
+# لایه ۳: توزیع هیدروژن (ابتدا ایستگاه سوخت، سپس پیل سوختی)
+fc_power = 0.0
+grid_export = 0.0
+if st.session_state.main_tank_kg > 0.5:
+    if st.session_state.h2_station_kg < 5.0:
+        st.session_state.h2_station_kg += 0.5
+        st.session_state.main_tank_kg -= 0.5
     else:
-        st.success("Operating on 100% Renewable Energy.")
+        # هیدروژن مازاد برای پیل سوختی
+        fc_power = 8.0 # تولید ۸ کیلووات
+        st.session_state.main_tank_kg -= 0.3
+        ev_station_load = 5.0
+        grid_export = max(0, fc_power - ev_station_load)
 
-# تکرار شبیه‌سازی بر اساس گام زمانی تعریف شده
+# --- ۴. رندر کردن داشبورد لایه به لایه ---
+
+# --- لایه ۱ ---
+st.markdown('<div class="layer-header">🌐 لایه ۱: ورودی‌های محیطی و سوئیچینگ منبع</div>', unsafe_allow_html=True)
+c1_1, c1_2, c1_3 = st.columns(3)
+c1_1.metric("Solar (Zagreb)", f"{w['irradiance_raw']:.1f} W/m²")
+c1_2.metric("Wind Speed", f"{w['wind_speed']:.1f} m/s")
+c1_3.info(f"منبع فعال: {source_name}")
+
+# --- لایه ۲ ---
+st.markdown('<div class="layer-header">🔋 لایه ۲: مدیریت باتری و زنجیره تولید H2</div>', unsafe_allow_html=True)
+c2_1, c2_2, c2_3 = st.columns(3)
+with c2_1:
+    st.write("وضعیت باتری (BESS)")
+    st.progress(0.7) # فرضی
+    st.caption(f"توان ورودی به باتری: {p_to_battery:.1f} kW")
+with c2_2:
+    st.write("سطح مخزن بافر")
+    st.progress(min(st.session_state.buffer_level/10, 1.0))
+    st.write(f"کمپرسور: {'🟢 روشن' if compressor_active else '🔴 خاموش'}")
+with c2_3:
+    st.metric("مخزن اصلی هیدروژن", f"{st.session_state.main_tank_kg:.2f} kg")
+
+# --- لایه ۳ ---
+st.markdown('<div class="layer-header">🚗 لایه ۳: لجستیک سوخت و ایستگاه EV</div>', unsafe_allow_html=True)
+c3_1, c3_2, c3_3 = st.columns(3)
+c3_1.metric("مخزن ایستگاه سوخت (۵kg)", f"{st.session_state.h2_station_kg:.2f} kg")
+c3_2.metric("خروجی پیل سوختی", f"{fc_power} kW")
+c3_3.metric("صادرات به شبکه (Grid)", f"{grid_export} kW", delta="درآمدزایی فعال")
+
+# --- لایه ۴ ---
+st.markdown('<div class="layer-header">📊 لایه ۴: تحلیل‌های پیشرفته و بازیافت حرارت</div>', unsafe_allow_html=True)
+c4_1, c4_2 = st.columns([2, 1])
+with c4_1:
+    # نمودار Sankey برای نمایش جریان انرژی
+    fig_sankey = go.Figure(go.Sankey(
+        node=dict(label=["Renewables", "Battery", "Electrolyzer", "H2 Tank", "Fuel Cell", "EV Station", "Grid"]),
+        link=dict(source=[0, 0, 2, 3, 4, 4], target=[1, 2, 3, 4, 5, 6], value=[p_to_battery, p_to_electrolyzer, 20, 10, 5, 2])
+    ))
+    fig_sankey.update_layout(title_text="نقشه جریان انرژی (Sankey)", font_size=10, height=300)
+    st.plotly_chart(fig_sankey, use_container_width=True)
+
+with c4_2:
+    st.metric("حرارت بازیافتی (Heat Recovery)", "4.2 kWt")
+    st.metric("کاهش لحظه‌ای CO2", "1.2 kg/hr")
+
+# تکرار شبیه‌سازی
 time.sleep(Config.TIMESTEP_SEC)
 st.rerun()
