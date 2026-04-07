@@ -32,15 +32,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SESSION STATE MANAGEMENT ---
+# --- 2. SESSION STATE MANAGEMENT (Fixed Initialization) ---
 if 'init' not in st.session_state:
-    st.session_state.update({
-        'buffer': 2.5, 'main_tank': 1.2, 'h2_station': 3.1, 
-        'history': pd.DataFrame(columns=['Time', 'Solar', 'Wind', 'EV']),
-        'init': True
-    })
-
-now_zagreb = datetime.now(pytz.timezone('Europe/Zagreb'))
+    st.session_state.buffer = 0.0
+    st.session_state.main_tank = 0.0
+    st.session_state.h2_station = 0.0
+    st.session_state.history = pd.DataFrame(columns=['Time', 'Solar', 'Wind', 'EV'])
+    st.session_state.init = True
 
 # --- 3. DATA ACQUISITION & LOGIC ---
 w = WeatherProvider().fetch_current_data()
