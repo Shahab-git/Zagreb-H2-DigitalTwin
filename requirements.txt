@@ -1,7 +1,7 @@
 streamlit
 pandas
-numpy
 plotly
-requests
-scikit-learn
+numpy
 pytz
+requests
+statsmodels  <-- این مورد حتماً اضافه شود
