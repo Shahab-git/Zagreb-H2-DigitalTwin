@@ -7,10 +7,10 @@ import time
 import numpy as np
 import pytz
 
-# --- 1. تنظیمات صفحه و استایل ---
-st.set_page_config(page_title="LUMINIH2 ULTIMATE DIGITAL TWIN", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. تنظیمات سیستمی و ظاهری ---
+st.set_page_config(page_title="LUMINIH2 ULTIMATE", layout="wide", initial_sidebar_state="collapsed")
 
-# استایل CSS سفارشی برای تم سفید و حرفه‌ای
+# استایل اختصاصی برای تم سفید حرفه‌ای (Zagreb Light Theme)
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; color: #1e293b; }
@@ -19,159 +19,159 @@ st.markdown("""
         border-left: 5px solid #0ea5e9; margin-bottom: 25px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    .metric-card {
-        background: #f1f5f9; padding: 15px; border-radius: 10px;
-        text-align: center; border: 1px solid #e2e8f0;
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #f1f5f9; border-radius: 5px 5px 0 0; padding: 8px 16px; color: #475569;
     }
-    h1, h2, h3 { color: #0f172a !important; font-family: 'Segoe UI', sans-serif; }
+    .stTabs [aria-selected="true"] { background-color: #0ea5e9 !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. مدیریت داده‌ها (Session State) ---
-# ایجاد دیتابیس مجازی برای ۳۰ نقطه زمانی آخر
+# --- 2. مدیریت داده‌های زنده (Session State) ---
 if 'history' not in st.session_state:
-    st.session_state.history = pd.DataFrame(columns=['Time', 'Solar', 'Wind', 'H2_Tank', 'Revenue', 'Efficiency', 'CO2'])
-    st.session_state.bess_soc = 0.65
-    st.session_state.h2_station = 1.2
+    st.session_state.history = pd.DataFrame(columns=['Time', 'Solar', 'Wind', 'H2_Fill', 'Revenue', 'Efficiency', 'CO2'])
+    st.session_state.bess_soc = 0.55
+    st.session_state.h2_station = 1.5
 
-# دریافت زمان زنده زاگرب
+# زمان زنده زاگرب
 zagreb_tz = pytz.timezone('Europe/Zagreb')
-t_display = datetime.now(zagreb_tz).strftime('%H:%M:%S')
+t_now = datetime.now(zagreb_tz).strftime('%H:%M:%S')
 
-# شبیه‌سازی تلمتری زنده (جایگزین با داده‌های واقعی در مرحله بعد)
-s_val = max(0, 500 + 300 * np.sin(time.time()/100) + np.random.normal(0, 10))
-w_val = max(0, 8 + 4 * np.cos(time.time()/150) + np.random.normal(0, 0.5))
-eff_val = 82 + np.random.uniform(-1, 1)
-rev_val = 12.5 + np.random.uniform(0, 2)
-co2_val = 0.45 + np.random.uniform(0, 0.05)
+# شبیه‌سازی هوشمند تلمتری (جایگزین با ماژول‌های فیزیکی شما)
+s_val = max(0, 450 + 200 * np.sin(time.time()/60) + np.random.normal(0, 5))
+w_val = max(2, 6 + 3 * np.cos(time.time()/100) + np.random.normal(0, 0.2))
+eff = 82 + np.random.uniform(-1, 1)
+rev = 4.5 + np.random.uniform(0, 0.5)
+co2 = 0.3 + np.random.uniform(0, 0.02)
 
-# بروزرسانی تاریخچه
-new_data = pd.DataFrame([[t_display, s_val, w_val, st.session_state.h2_station, rev_val, eff_val, co2_val]], 
+# بروزرسانی دیتابیس لحظه‌ای
+new_row = pd.DataFrame([[t_now, s_val, w_val, st.session_state.h2_station, rev, eff, co2]], 
                         columns=st.session_state.history.columns)
-st.session_state.history = pd.concat([st.session_state.history, new_data], ignore_index=True).iloc[-30:]
+st.session_state.history = pd.concat([st.session_state.history, new_row], ignore_index=True).iloc[-30:]
 
-# --- 3. هدر ناوبری ---
+# --- 3. هدر فرماندهی پروژه ---
 st.markdown(f"""
 <div class="nav-header">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <h1 style="margin:0; font-size:24px;">🌐 LUMINIH2: Digital Twin Hub</h1>
-            <p style="margin:0; color:#64748b;">North Adriatic Green Hydrogen Corridor | Zagreb Node</p>
+            <h1 style="margin:0; font-size:26px; color:#0f172a;">🌐 LUMINIH2: Digital Twin Control</h1>
+            <p style="margin:0; color:#64748b;">Zagreb Energy Hub | Real-time Power Switching</p>
         </div>
         <div style="text-align:right;">
-            <span style="font-size:20px; font-weight:bold;">{t_display}</span><br>
-            <span style="color:#10b981;">● LIVE TELEMETRY</span>
+            <span style="font-size:22px; font-weight:bold; color:#1e293b;">{t_now}</span><br>
+            <span style="color:#10b981; font-weight:bold;">● ZONE ACTIVE</span>
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# --- 4. چیدمان ۵ ناحیه‌ای (ZONEs) ---
-tabs = st.tabs(["🌍 Acquisition", "🧪 Production", "🔋 Storage", "🔌 Distribution", "📊 Analytics"])
-chart_theme = "plotly_white"
-color_scale = ["#0ea5e9", "#0284c7", "#0369a1", "#075985"]
+# --- 4. داشبورد ۲۰ نموداری (۵ تب اصلی) ---
+tab_names = ["🌍 1. Acquisition", "🧪 2. Production", "🔋 3. Storage", "🔌 4. Distribution", "📊 5. Analytics"]
+tabs = st.tabs(tab_names)
+theme = "plotly_white"
 
-# --- ZONE 1: ACQUISITION ---
+# --- ZONE 1: ACQUISITION (پایش اتمسفر زاگرب) ---
 with tabs[0]:
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("1. Wind Turbulence Intensity")
-        fig1 = go.Figure(go.Scatterpolar(r=[w_val, w_val*1.2, w_val*0.8, w_val], 
-                                         theta=[0, 90, 180, 270], fill='toself', line_color='#0ea5e9'))
-        fig1.update_layout(template=chart_theme, height=300, margin=dict(l=20, r=20, t=40, b=20))
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("1. Wind Vector Dynamics")
+        fig1 = go.Figure(go.Scatterpolar(r=[w_val, w_val*1.1, w_val*0.9, w_val], theta=[0, 90, 180, 270], fill='toself'))
+        fig1.update_layout(template=theme, height=300)
         st.plotly_chart(fig1, use_container_width=True)
         
-        st.subheader("2. Solar Irradiance Heatmap")
-        fig2 = px.density_heatmap(st.session_state.history, x="Time", y="Solar", color_continuous_scale="Blues")
-        fig2.update_layout(template=chart_theme, height=300)
+        st.subheader("2. Irradiance Distribution")
+        fig2 = px.histogram(st.session_state.history, x="Solar", nbins=10, color_discrete_sequence=['#0ea5e9'])
         st.plotly_chart(fig2, use_container_width=True)
-
-    with col2:
+    with c2:
         st.subheader("3. Resource Mix Portfolio")
-        fig3 = px.pie(values=[s_val, w_val*10, 100], names=['Solar', 'Wind', 'Grid'], hole=0.7, color_discrete_sequence=color_scale)
-        fig3.update_layout(template=chart_theme, height=300, showlegend=False)
+        fig3 = px.pie(values=[s_val, w_val*12, 150], names=['Solar', 'Wind', 'Grid Balance'], hole=0.7)
         st.plotly_chart(fig3, use_container_width=True)
         
-        st.subheader("4. Real-time Absorption (W/m²)")
-        fig4 = px.area(st.session_state.history, x="Time", y="Solar", line_shape="spline")
-        fig4.update_traces(fillcolor="rgba(14, 165, 233, 0.2)", line_color="#0ea5e9")
-        fig4.update_layout(template=chart_theme, height=300)
+        st.subheader("4. Telemetry Flux (Live)")
+        fig4 = px.area(st.session_state.history, x="Time", y="Solar")
+        fig4.update_traces(fillcolor="rgba(14, 165, 233, 0.1)", line_color="#0ea5e9")
         st.plotly_chart(fig4, use_container_width=True)
 
-# --- ZONE 2: PRODUCTION ---
+# --- ZONE 2: PRODUCTION (الکترولایزر و مدیریت انرژی) ---
 with tabs[1]:
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.subheader("5. Electrolyzer Efficiency (PEM)")
-        fig5 = px.line(st.session_state.history, x="Time", y="Efficiency")
-        fig5.update_traces(line_color="#10b981")
-        st.plotly_chart(fig5, use_container_width=True)
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("5. Stack Efficiency (%)")
+        st.line_chart(st.session_state.history.set_index('Time')['Efficiency'])
         
-        st.subheader("6. Thermal Stack Health")
-        fig6 = go.Figure(go.Indicator(mode="gauge+number", value=58, gauge={'bar':{'color':"#0ea5e9"}, 'axis':{'range':[0, 100]}}))
-        fig6.update_layout(height=250, margin=dict(t=50, b=0))
+        st.subheader("6. Electrolyzer Heat Map")
+        fig6 = go.Figure(go.Indicator(mode="gauge+number", value=62, title={'text': "Stack Temp °C"}, 
+                                      gauge={'bar':{'color':"#ef4444"}, 'axis':{'range':[0, 100]}}))
         st.plotly_chart(fig6, use_container_width=True)
-    with col2:
-        st.subheader("7. Water Consumption (L/h)")
-        st.metric("Deionized Water Flow", "14.2 L/h", "Stable")
-        st.subheader("8. Load vs Efficiency Curve")
-        fig8 = px.scatter(st.session_state.history, x="Solar", y="Efficiency", trendline="lowess")
+    with c2:
+        st.subheader("7. Specific Consumption")
+        st.metric("Energy Intensity", "51.8 kWh/kg", "-0.4")
+        
+        st.subheader("8. Load-Efficiency Correlation")
+        # حل مشکل statsmodels با try-except
+        try:
+            fig8 = px.scatter(st.session_state.history, x="Solar", y="Efficiency", trendline="ols")
+        except:
+            fig8 = px.scatter(st.session_state.history, x="Solar", y="Efficiency")
         st.plotly_chart(fig8, use_container_width=True)
 
-# --- ZONE 3: STORAGE ---
+# --- ZONE 3: STORAGE (ذخیره‌سازی هوشمند) ---
 with tabs[2]:
-    col1, col2 = st.columns(2)
-    with col1:
+    c1, c2 = st.columns(2)
+    with c1:
         st.subheader("9. BESS State of Charge")
-        fig9 = go.Figure(go.Indicator(mode="number+delta", value=st.session_state.bess_soc*100, delta={'reference': 50}))
+        fig9 = go.Figure(go.Indicator(mode="gauge+number", value=st.session_state.bess_soc*100, 
+                                      gauge={'bar':{'color':"#10b981"}}))
         st.plotly_chart(fig9, use_container_width=True)
-        st.subheader("10. Battery Temperature Sync")
-        st.bar_chart(np.random.normal(25, 1, 15))
-    with col2:
-        st.subheader("11. Tank Pressure Dynamics")
-        st.info(f"Main Tank: {30 + np.random.uniform(0, 2):.1f} bar | Safety: OK")
-        st.subheader("12. H2 Mass Balance (kg)")
-        fig12 = px.line(st.session_state.history, x="Time", y="H2_Tank")
+        
+        st.subheader("10. Battery Voltage Stability")
+        st.bar_chart(np.random.normal(400, 2, 20))
+    with c2:
+        st.subheader("11. Tank Pressure (Bar)")
+        st.info("Operating Pressure: 32.4 Bar | Threshold: 35.0")
+        
+        st.subheader("12. Hydrogen Inventory")
+        fig12 = px.line(st.session_state.history, x="Time", y="H2_Fill", markers=True)
         st.plotly_chart(fig12, use_container_width=True)
 
-# --- ZONE 4: DISTRIBUTION ---
+# --- ZONE 4: DISTRIBUTION (توزیع سبز و EV) ---
 with tabs[3]:
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("13. HRS Station (5kg Hub)")
-        fill = st.session_state.h2_station / 5.0
-        st.progress(fill)
-        st.caption(f"Current Fill: {st.session_state.h2_station:.2f} kg / 5.00 kg")
-        st.subheader("14. Fuel Cell Power Output")
-        st.metric("Regeneration Active", "18.4 kW")
+        st.subheader("13. HRS 5kg Station Fill")
+        st.progress(st.session_state.h2_station / 5.0)
+        st.caption(f"Current Capacity: {st.session_state.h2_station:.2f} / 5.00 kg")
+        
+        st.subheader("14. Fuel Cell Hub Status")
+        st.success("FC Status: NOMINAL | Output: 24.1 kW")
     with c2:
-        st.subheader("15. EV Charging Load")
-        st.line_chart(np.random.randint(10, 50, 20))
-        st.subheader("16. Output Purity")
-        st.success("H2 Purity: 99.999% (ISO Certified)")
+        st.subheader("15. EV Charging Station Load")
+        st.line_chart(np.random.randint(5, 45, 15))
+        
+        st.subheader("16. Purity Compliance")
+        st.markdown("✅ **ISO 14687:2019** - Grade D (99.999% H2)")
 
-# --- ZONE 5: ANALYTICS ---
+# --- ZONE 5: ANALYTICS (ثروت و کربن) ---
 with tabs[4]:
-    st.subheader("17. System-Wide Energy Flow (Sankey)")
+    st.subheader("17. Global Energy Flow (Sankey)")
     fig17 = go.Figure(go.Sankey(
-        node=dict(label=["Renewables", "BESS", "Electrolyzer", "Storage", "EV/HRS", "Grid"], color="#0ea5e9", pad=15),
-        link=dict(source=[0, 0, 1, 2, 3, 3], target=[1, 2, 0, 3, 4, 5], value=[40, 60, 10, 55, 30, 25])
+        node=dict(label=["Atmosphere", "BESS", "Electrolyzer", "Storage", "EV Station", "Grid"], color="#0ea5e9"),
+        link=dict(source=[0, 0, 1, 2, 3, 3], target=[1, 2, 0, 3, 4, 5], value=[35, 65, 10, 50, 25, 20])
     ))
-    fig17.update_layout(height=400, template=chart_theme)
+    fig17.update_layout(height=400, template=theme)
     st.plotly_chart(fig17, use_container_width=True)
-
+    
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.subheader("18. LCOH Insight")
-        st.metric("Green H2 Cost", "$4.12 /kg", "-0.05")
+        st.subheader("18. Levelized Cost (LCOH)")
+        st.metric("Price Index", "$4.08 /kg", "-2%")
     with c2:
-        st.subheader("19. CO2 Abatement")
-        total_co2 = st.session_state.history['CO2'].sum()
-        st.metric("Carbon Saved", f"{total_co2:.2f} kg")
+        st.subheader("19. CO2 Avoided (Zagreb)")
+        st.metric("Total Abatement", f"{st.session_state.history['CO2'].sum():.2f} kg", "+0.04")
     with c3:
-        st.subheader("20. Financial Zone")
-        st.metric("Daily Revenue", f"${st.session_state.history['Revenue'].sum():.2f}")
+        st.subheader("20. Financial Portfolio")
+        st.metric("Grid Revenue", f"${st.session_state.history['Revenue'].sum():.2f}")
 
-# --- 5. منطق تکرار (Live Refresh) ---
+# --- 5. رفرش خودکار ---
 time.sleep(2)
 st.rerun()
