@@ -1,4 +1,3 @@
-# main.py - THE ULTIMATE 20-CHART DIGITAL TWIN (Light & Live Zagreb Time)
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -8,171 +7,171 @@ import time
 import numpy as np
 import pytz
 
-# --- 1. CORE MODULES ---
-try:
-    from config import Config
-    from weather_api import WeatherProvider
-    from energy_assets import SolarSystem, WindSystem
-    from ems_brain import EMSBrain
-except:
-    pass 
+# --- 1. تنظیمات صفحه و استایل ---
+st.set_page_config(page_title="LUMINIH2 ULTIMATE DIGITAL TWIN", layout="wide", initial_sidebar_state="collapsed")
 
-# --- 2. LIGHT THEME STYLING ---
-st.set_page_config(page_title="LUMINIH2 ULTIMATE", layout="wide")
-
+# استایل CSS سفارشی برای تم سفید و حرفه‌ای
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; color: #1e293b; }
     .nav-header { 
-        background: #f8fafc; padding: 15px 30px; border-radius: 15px; 
-        border-bottom: 3px solid #0ea5e9; margin-bottom: 25px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    }
-    .card { 
-        background: #ffffff; padding: 15px; border-radius: 10px; 
-        border: 1px solid #e2e8f0; margin-bottom: 15px;
+        background: #f8fafc; padding: 20px; border-radius: 15px; 
+        border-left: 5px solid #0ea5e9; margin-bottom: 25px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    h1, h2, h3, p, span { color: #1e293b !important; }
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #f1f5f9; border-radius: 5px 5px 0 0; padding: 10px 20px;
+    .metric-card {
+        background: #f1f5f9; padding: 15px; border-radius: 10px;
+        text-align: center; border: 1px solid #e2e8f0;
     }
+    h1, h2, h3 { color: #0f172a !important; font-family: 'Segoe UI', sans-serif; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. SESSION STATE & LIVE DATA ---
+# --- 2. مدیریت داده‌ها (Session State) ---
+# ایجاد دیتابیس مجازی برای ۳۰ نقطه زمانی آخر
 if 'history' not in st.session_state:
-    st.session_state.history = pd.DataFrame(columns=['Time', 'Solar', 'Wind', 'H2_Fill', 'Revenue', 'Efficiency', 'CO2'])
-    st.session_state.bess_soc = 0.45
-    st.session_state.h2_tank = 2.5
-    st.session_state.h2_station = 1.0
+    st.session_state.history = pd.DataFrame(columns=['Time', 'Solar', 'Wind', 'H2_Tank', 'Revenue', 'Efficiency', 'CO2'])
+    st.session_state.bess_soc = 0.65
+    st.session_state.h2_station = 1.2
 
 # دریافت زمان زنده زاگرب
 zagreb_tz = pytz.timezone('Europe/Zagreb')
-now_zagreb = datetime.now(zagreb_tz)
-t_display = now_zagreb.strftime('%H:%M:%S')
+t_display = datetime.now(zagreb_tz).strftime('%H:%M:%S')
 
-# بروزرسانی دیتا برای نمودارها
-s_val, w_val = 450 + np.random.uniform(-20, 20), 5.5 + np.random.uniform(-0.5, 0.5)
-rev = 5.2 + np.random.uniform(-1, 1)
-eff = 82 + np.random.uniform(-2, 2)
-co2 = 3.5 + np.random.uniform(0, 0.5)
+# شبیه‌سازی تلمتری زنده (جایگزین با داده‌های واقعی در مرحله بعد)
+s_val = max(0, 500 + 300 * np.sin(time.time()/100) + np.random.normal(0, 10))
+w_val = max(0, 8 + 4 * np.cos(time.time()/150) + np.random.normal(0, 0.5))
+eff_val = 82 + np.random.uniform(-1, 1)
+rev_val = 12.5 + np.random.uniform(0, 2)
+co2_val = 0.45 + np.random.uniform(0, 0.05)
 
-new_row = pd.DataFrame([[t_display, s_val, w_val, st.session_state.h2_tank, rev, eff, co2]], 
-                        columns=['Time', 'Solar', 'Wind', 'H2_Fill', 'Revenue', 'Efficiency', 'CO2'])
-st.session_state.history = pd.concat([st.session_state.history, new_row], ignore_index=True).iloc[-30:]
+# بروزرسانی تاریخچه
+new_data = pd.DataFrame([[t_display, s_val, w_val, st.session_state.h2_station, rev_val, eff_val, co2_val]], 
+                        columns=st.session_state.history.columns)
+st.session_state.history = pd.concat([st.session_state.history, new_data], ignore_index=True).iloc[-30:]
 
-# --- 4. TOP BAR (ZAGREB LIVE UPDATE) ---
+# --- 3. هدر ناوبری ---
 st.markdown(f"""
 <div class="nav-header">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h2 style="margin:0; color:#0ea5e9; font-weight:bold;">🌐 LUMINIH2: 20-STREAM COMMAND</h2>
-        <div style="text-align:right; font-size: 18px;">
-            <span style="color:#64748b;">Zagreb Hub</span> | 
-            <span style="font-weight:bold; color:#1e293b;">{t_display}</span> | 
-            <span style="color:#10b981; font-weight:bold;">● SYSTEM ONLINE</span>
+        <div>
+            <h1 style="margin:0; font-size:24px;">🌐 LUMINIH2: Digital Twin Hub</h1>
+            <p style="margin:0; color:#64748b;">North Adriatic Green Hydrogen Corridor | Zagreb Node</p>
+        </div>
+        <div style="text-align:right;">
+            <span style="font-size:20px; font-weight:bold;">{t_display}</span><br>
+            <span style="color:#10b981;">● LIVE TELEMETRY</span>
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# --- 5. THE 5-ZONE DASHBOARD (Tabs for 20 Charts) ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "🌍 1. Acquisition", "🧪 2. Production", "🔋 3. Storage", "🔌 4. Distribution", "📊 5. Analytics"
-])
-
+# --- 4. چیدمان ۵ ناحیه‌ای (ZONEs) ---
+tabs = st.tabs(["🌍 Acquisition", "🧪 Production", "🔋 Storage", "🔌 Distribution", "📊 Analytics"])
 chart_theme = "plotly_white"
+color_scale = ["#0ea5e9", "#0284c7", "#0369a1", "#075985"]
 
-# --- TAB 1: ACQUISITION ---
-with tab1:
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("1. Wind Rose (Zagreb)")
-        fig1 = go.Figure(go.Barpolar(r=[10, 15, 20, 7], theta=[0, 90, 180, 270], marker_color="#0ea5e9"))
-        fig1.update_layout(template=chart_theme)
+# --- ZONE 1: ACQUISITION ---
+with tabs[0]:
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("1. Wind Turbulence Intensity")
+        fig1 = go.Figure(go.Scatterpolar(r=[w_val, w_val*1.2, w_val*0.8, w_val], 
+                                         theta=[0, 90, 180, 270], fill='toself', line_color='#0ea5e9'))
+        fig1.update_layout(template=chart_theme, height=300, margin=dict(l=20, r=20, t=40, b=20))
         st.plotly_chart(fig1, use_container_width=True)
+        
         st.subheader("2. Solar Irradiance Heatmap")
-        fig2 = px.density_heatmap(st.session_state.history, x="Time", y="Solar", template=chart_theme)
+        fig2 = px.density_heatmap(st.session_state.history, x="Time", y="Solar", color_continuous_scale="Blues")
+        fig2.update_layout(template=chart_theme, height=300)
         st.plotly_chart(fig2, use_container_width=True)
-    with c2:
-        st.subheader("3. Power Source Mix")
-        fig3 = px.pie(values=[s_val, w_val, 50], names=['Solar', 'Wind', 'Grid'], hole=0.6, template=chart_theme)
+
+    with col2:
+        st.subheader("3. Resource Mix Portfolio")
+        fig3 = px.pie(values=[s_val, w_val*10, 100], names=['Solar', 'Wind', 'Grid'], hole=0.7, color_discrete_sequence=color_scale)
+        fig3.update_layout(template=chart_theme, height=300, showlegend=False)
         st.plotly_chart(fig3, use_container_width=True)
-        st.subheader("4. Resource Trend (Live)")
-        fig4 = px.line(st.session_state.history, x="Time", y="Solar", template=chart_theme)
+        
+        st.subheader("4. Real-time Absorption (W/m²)")
+        fig4 = px.area(st.session_state.history, x="Time", y="Solar", line_shape="spline")
+        fig4.update_traces(fillcolor="rgba(14, 165, 233, 0.2)", line_color="#0ea5e9")
+        fig4.update_layout(template=chart_theme, height=300)
         st.plotly_chart(fig4, use_container_width=True)
 
-# --- TAB 2: PRODUCTION ---
-with tab2:
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("5. Electrolyzer Efficiency")
-        fig5 = px.line(st.session_state.history, x="Time", y="Efficiency", template=chart_theme)
+# --- ZONE 2: PRODUCTION ---
+with tabs[1]:
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.subheader("5. Electrolyzer Efficiency (PEM)")
+        fig5 = px.line(st.session_state.history, x="Time", y="Efficiency")
+        fig5.update_traces(line_color="#10b981")
         st.plotly_chart(fig5, use_container_width=True)
-        st.subheader("6. Stack Temp Gauge")
-        fig6 = go.Figure(go.Indicator(mode="gauge+number", value=65, title={'text': "°C"}, gauge={'bar':{'color':"#ef4444"}}))
-        fig6.update_layout(template=chart_theme, height=250)
+        
+        st.subheader("6. Thermal Stack Health")
+        fig6 = go.Figure(go.Indicator(mode="gauge+number", value=58, gauge={'bar':{'color':"#0ea5e9"}, 'axis':{'range':[0, 100]}}))
+        fig6.update_layout(height=250, margin=dict(t=50, b=0))
         st.plotly_chart(fig6, use_container_width=True)
-    with c2:
-        st.subheader("7. Energy Intensity")
-        st.metric("Avg Consumption", "52.4 kWh/kg", "-0.2")
-        st.subheader("8. Production Characteristics")
-        fig8 = px.scatter(st.session_state.history, x="Solar", y="Efficiency", template=chart_theme)
+    with col2:
+        st.subheader("7. Water Consumption (L/h)")
+        st.metric("Deionized Water Flow", "14.2 L/h", "Stable")
+        st.subheader("8. Load vs Efficiency Curve")
+        fig8 = px.scatter(st.session_state.history, x="Solar", y="Efficiency", trendline="lowess")
         st.plotly_chart(fig8, use_container_width=True)
 
-# --- TAB 3: STORAGE ---
-with tab3:
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("9. BESS SoC (%)")
-        fig9 = go.Figure(go.Indicator(mode="gauge+number", value=st.session_state.bess_soc*100, gauge={'bar':{'color':"#10b981"}}))
-        fig9.update_layout(template=chart_theme, height=250)
+# --- ZONE 3: STORAGE ---
+with tabs[2]:
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("9. BESS State of Charge")
+        fig9 = go.Figure(go.Indicator(mode="number+delta", value=st.session_state.bess_soc*100, delta={'reference': 50}))
         st.plotly_chart(fig9, use_container_width=True)
-        st.subheader("10. Battery Cycle Trend")
-        st.bar_chart(np.random.randn(20))
-    with c2:
-        st.subheader("11. Buffer Pressure (bar)")
-        st.metric("Pressure Status", "30.5 bar", "Stable")
-        st.subheader("12. H2 Inventory Level")
-        fig12 = px.area(st.session_state.history, x="Time", y="H2_Fill", template=chart_theme)
+        st.subheader("10. Battery Temperature Sync")
+        st.bar_chart(np.random.normal(25, 1, 15))
+    with col2:
+        st.subheader("11. Tank Pressure Dynamics")
+        st.info(f"Main Tank: {30 + np.random.uniform(0, 2):.1f} bar | Safety: OK")
+        st.subheader("12. H2 Mass Balance (kg)")
+        fig12 = px.line(st.session_state.history, x="Time", y="H2_Tank")
         st.plotly_chart(fig12, use_container_width=True)
 
-# --- TAB 4: DISTRIBUTION ---
-with tab4:
+# --- ZONE 4: DISTRIBUTION ---
+with tabs[3]:
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("13. H2 Station Fill (5kg)")
-        st.progress(st.session_state.h2_station / 5.0)
-        st.subheader("14. Fuel Cell Hub")
-        st.metric("FC Active Power", "22.5 kW")
+        st.subheader("13. HRS Station (5kg Hub)")
+        fill = st.session_state.h2_station / 5.0
+        st.progress(fill)
+        st.caption(f"Current Fill: {st.session_state.h2_station:.2f} kg / 5.00 kg")
+        st.subheader("14. Fuel Cell Power Output")
+        st.metric("Regeneration Active", "18.4 kW")
     with c2:
-        st.subheader("15. EV Load Simulation")
-        st.line_chart(st.session_state.history['Solar'] * 0.1)
-        st.subheader("16. Gas Quality Status")
-        st.success("ISO 14687 Certified: 99.999%")
+        st.subheader("15. EV Charging Load")
+        st.line_chart(np.random.randint(10, 50, 20))
+        st.subheader("16. Output Purity")
+        st.success("H2 Purity: 99.999% (ISO Certified)")
 
-# --- TAB 5: ANALYTICS ---
-with tab5:
-    st.subheader("17. Full System Energy Flow (Sankey Diagram)")
+# --- ZONE 5: ANALYTICS ---
+with tabs[4]:
+    st.subheader("17. System-Wide Energy Flow (Sankey)")
     fig17 = go.Figure(go.Sankey(
-        node=dict(label=["Sun/Wind", "BESS", "Electrolyzer", "H2 Storage", "EV Station", "Grid"], color="#0ea5e9"),
-        link=dict(source=[0, 0, 2, 3, 3], target=[1, 2, 3, 4, 5], value=[10, 20, 15, 8, 7])
+        node=dict(label=["Renewables", "BESS", "Electrolyzer", "Storage", "EV/HRS", "Grid"], color="#0ea5e9", pad=15),
+        link=dict(source=[0, 0, 1, 2, 3, 3], target=[1, 2, 0, 3, 4, 5], value=[40, 60, 10, 55, 30, 25])
     ))
-    fig17.update_layout(template=chart_theme, height=400)
+    fig17.update_layout(height=400, template=chart_theme)
     st.plotly_chart(fig17, use_container_width=True)
-    
+
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.subheader("18. Cost Analytics (LCOH)")
-        st.metric("Current $/kg", "$4.12")
+        st.subheader("18. LCOH Insight")
+        st.metric("Green H2 Cost", "$4.12 /kg", "-0.05")
     with c2:
-        st.subheader("19. Total CO2 Saved")
-        st.metric("Abatement", f"{st.session_state.history['CO2'].sum():.1f} kg")
+        st.subheader("19. CO2 Abatement")
+        total_co2 = st.session_state.history['CO2'].sum()
+        st.metric("Carbon Saved", f"{total_co2:.2f} kg")
     with c3:
-        st.subheader("20. Financial Status")
-        st.metric("Grid Revenue", f"${st.session_state.history['Revenue'].iloc[-1]:.2f}")
+        st.subheader("20. Financial Zone")
+        st.metric("Daily Revenue", f"${st.session_state.history['Revenue'].sum():.2f}")
 
-# AUTO-REFRESH (LUMIN-SYNC)
+# --- 5. منطق تکرار (Live Refresh) ---
 time.sleep(2)
 st.rerun()
