@@ -3,5 +3,5 @@ pandas
 plotly
 numpy
 pytz
-requests
-statsmodels  <-- این مورد حتماً اضافه شود
+statsmodels
+scipy
