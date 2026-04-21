@@ -12,8 +12,113 @@ import logging
 import warnings
 
 import numpy as np
-from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import MinMaxScaler
+
+# ---------------------------------------------------------------------------
+# Pure-NumPy MLP — no sklearn dependency (Streamlit Cloud safe)
+# ---------------------------------------------------------------------------
+
+class _MinMaxScaler:
+    """Minimal MinMaxScaler replacement using only NumPy."""
+    def __init__(self):
+        self._min = 0.0
+        self._range = 1.0
+
+    def fit_transform(self, X: np.ndarray) -> np.ndarray:
+        self._min = float(X.min())
+        self._range = float(X.max() - X.min()) or 1.0
+        return (X - self._min) / self._range
+
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        return (X - self._min) / self._range
+
+    def inverse_transform(self, X: np.ndarray) -> np.ndarray:
+        return X * self._range + self._min
+
+
+class _MLPRegressor:
+    """
+    Lightweight 3-layer MLP trained with mini-batch SGD + Adam.
+    Replaces sklearn.MLPRegressor with zero external dependencies.
+    Architecture: input → 64 → 32 → 1  (ReLU hidden, linear output)
+    """
+
+    def __init__(self, hidden=(64, 32), lr=1e-3, epochs=300, batch=32, seed=42):
+        self._hidden = hidden
+        self._lr = lr
+        self._epochs = epochs
+        self._batch = batch
+        self._rng = np.random.default_rng(seed)
+        self._W: list[np.ndarray] = []
+        self._b: list[np.ndarray] = []
+        self.loss_: float = float("inf")
+
+    # ── init ────────────────────────────────────────────────────────────
+    def _init_weights(self, n_in: int):
+        sizes = [n_in] + list(self._hidden) + [1]
+        self._W, self._b = [], []
+        for i in range(len(sizes) - 1):
+            fan_in, fan_out = sizes[i], sizes[i + 1]
+            std = np.sqrt(2.0 / fan_in)          # He init
+            self._W.append(self._rng.normal(0, std, (fan_in, fan_out)))
+            self._b.append(np.zeros((1, fan_out)))
+        # Adam moments
+        self._mW = [np.zeros_like(w) for w in self._W]
+        self._vW = [np.zeros_like(w) for w in self._W]
+        self._mb = [np.zeros_like(b) for b in self._b]
+        self._vb = [np.zeros_like(b) for b in self._b]
+        self._t = 0
+
+    # ── forward ─────────────────────────────────────────────────────────
+    def _forward(self, X: np.ndarray):
+        acts = [X]
+        for i, (W, b) in enumerate(zip(self._W, self._b)):
+            z = acts[-1] @ W + b
+            a = np.maximum(0, z) if i < len(self._W) - 1 else z   # ReLU / linear
+            acts.append(a)
+        return acts
+
+    # ── backward ────────────────────────────────────────────────────────
+    def _backward(self, acts, y):
+        n = y.shape[0]
+        delta = (acts[-1] - y) / n           # MSE grad
+        self._t += 1
+        b1, b2, eps = 0.9, 0.999, 1e-8
+        for i in reversed(range(len(self._W))):
+            gW = acts[i].T @ delta
+            gb = delta.sum(axis=0, keepdims=True)
+            # Adam update
+            self._mW[i] = b1 * self._mW[i] + (1 - b1) * gW
+            self._vW[i] = b2 * self._vW[i] + (1 - b2) * gW ** 2
+            mW_hat = self._mW[i] / (1 - b1 ** self._t)
+            vW_hat = self._vW[i] / (1 - b2 ** self._t)
+            self._W[i] -= self._lr * mW_hat / (np.sqrt(vW_hat) + eps)
+
+            self._mb[i] = b1 * self._mb[i] + (1 - b1) * gb
+            self._vb[i] = b2 * self._vb[i] + (1 - b2) * gb ** 2
+            mb_hat = self._mb[i] / (1 - b1 ** self._t)
+            vb_hat = self._vb[i] / (1 - b2 ** self._t)
+            self._b[i] -= self._lr * mb_hat / (np.sqrt(vb_hat) + eps)
+
+            if i > 0:
+                delta = (delta @ self._W[i].T) * (acts[i] > 0)
+
+    # ── public API ──────────────────────────────────────────────────────
+    def fit(self, X: np.ndarray, y: np.ndarray):
+        self._init_weights(X.shape[1])
+        y = y.reshape(-1, 1)
+        idx = np.arange(len(X))
+        for _ in range(self._epochs):
+            self._rng.shuffle(idx)
+            for start in range(0, len(X), self._batch):
+                batch = idx[start:start + self._batch]
+                acts = self._forward(X[batch])
+                self._backward(acts, y[batch])
+        acts = self._forward(X)
+        self.loss_ = float(np.mean((acts[-1] - y) ** 2))
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        acts = self._forward(X)
+        return acts[-1].ravel()
 
 warnings.filterwarnings("ignore")
 logging.basicConfig(
@@ -107,16 +212,8 @@ class AIPredictor:
     UNCERTAINTY_GROWTH = 0.04  # +4% per additional forecast hour
 
     def __init__(self) -> None:
-        self.scaler = MinMaxScaler(feature_range=(0, 1))
-        self.model = MLPRegressor(
-            hidden_layer_sizes=(128, 64, 32),
-            activation="relu",
-            solver="adam",
-            alpha=0.001,            # L2 regularisation
-            max_iter=2000,
-            warm_start=True,        # Enables online re-training
-            random_state=42,
-        )
+        self.scaler = _MinMaxScaler()
+        self.model = _MLPRegressor(hidden=(64, 32), lr=1e-3, epochs=300, seed=42)
         self.is_trained: bool = False
         self._train_loss: float = -1.0
         self._last_train_size: int = 0
