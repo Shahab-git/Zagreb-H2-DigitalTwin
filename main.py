@@ -473,18 +473,19 @@ with tabs[1]:
     with c1:
         st.markdown("#### 5. Power Flow Allocation")
         if len(hist) > 1:
+            SERIES = [
+                ("bess_kw",        "#10b981", "rgba(16,185,129,0.7)",  "BESS"),
+                ("elec_kw",        "#8b5cf6", "rgba(139,92,246,0.7)",  "Electrolyzer"),
+                ("ev_kw",          "#3b82f6", "rgba(59,130,246,0.7)",  "EV Charger"),
+                ("grid_export_kw", "#f59e0b", "rgba(245,158,11,0.7)",  "Grid Export"),
+            ]
             fig5 = go.Figure()
-            for col, color, name in [
-                ("bess_kw", "#10b981", "BESS"),
-                ("elec_kw", "#8b5cf6", "Electrolyzer"),
-                ("ev_kw", "#3b82f6", "EV Charger"),
-                ("grid_export_kw", "#f59e0b", "Grid Export"),
-            ]:
+            for col, color, fill, name in SERIES:
                 fig5.add_trace(go.Scatter(
                     x=hist["time"], y=hist[col],
                     stackgroup="one", name=name,
                     line=dict(color=color, width=1),
-                    fillcolor=color.replace("#", "rgba(") + ",0.7)",
+                    fillcolor=fill,
                 ))
             fig5.update_layout(template=THEME, height=260, margin=dict(t=10, b=10),
                                yaxis_title="kW")
