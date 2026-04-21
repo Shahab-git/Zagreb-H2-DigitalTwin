@@ -1,7 +1,6 @@
 # =============================================================================
-# app.py — LUMINIH2 Digital Twin · Streamlit Dashboard
-# Integrated Green Hydrogen & E-Mobility Hub · Zagreb, Croatia
-# Version: 3.2 (Streamlit Cloud Ready · All Modules Connected)
+# main.py — LUMINIH2 Digital Twin Dashboard v4.0
+# Dark Industrial Theme · Zagreb, Croatia
 # =============================================================================
 
 import streamlit as st
@@ -9,7 +8,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
-import time
 import numpy as np
 import pytz
 
@@ -19,734 +17,438 @@ from hydrogen_assets import ElectrolyzerS30, HydrogenStorageChain, FuelCellAirce
 from ems_brain import EMSBrain
 from ai_forecaster import AIPredictor
 from weather_api import WeatherProvider
+from core_engine import TickEngine, LCOHAccumulator, AlertSystem, HistoryBuffer
 
-# =============================================================================
-# PAGE CONFIG — must be first Streamlit call
-# =============================================================================
-st.set_page_config(
-    page_title="LUMINIH2 Digital Twin",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+st.set_page_config(page_title="LUMINIH2 Digital Twin", page_icon="⚡",
+                   layout="wide", initial_sidebar_state="expanded")
 
-# =============================================================================
-# CUSTOM CSS — Zagreb Light Theme
-# =============================================================================
 st.markdown("""
 <style>
-.stApp { background-color: #f8fafc; color: #1e293b; }
-.block-container { padding-top: 1rem; padding-bottom: 1rem; }
-
-/* Header */
-.lumi-header {
-    background: #ffffff;
-    border-left: 5px solid #0ea5e9;
-    border-radius: 12px;
-    padding: 16px 24px;
-    margin-bottom: 20px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-
-/* KPI cards */
-.kpi-card {
-    background: #ffffff;
-    border-radius: 10px;
-    padding: 14px 18px;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    margin-bottom: 10px;
-}
-.kpi-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin: 0; }
-.kpi-value { font-size: 26px; font-weight: 600; color: #0f172a; margin: 2px 0; }
-.kpi-delta { font-size: 12px; margin: 0; }
-.kpi-delta.up   { color: #10b981; }
-.kpi-delta.down { color: #ef4444; }
-.kpi-delta.neu  { color: #64748b; }
-
-/* Status badges */
-.badge {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-}
-.badge-green  { background: #dcfce7; color: #15803d; }
-.badge-yellow { background: #fef9c3; color: #a16207; }
-.badge-red    { background: #fee2e2; color: #b91c1c; }
-.badge-blue   { background: #dbeafe; color: #1d4ed8; }
-
-/* Switching log */
-.switch-log {
-    background: #f1f5f9;
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
-    color: #334155;
-    min-height: 48px;
-}
-
-/* Tabs */
-.stTabs [data-baseweb="tab-list"] { gap: 6px; border-bottom: 2px solid #e2e8f0; }
-.stTabs [data-baseweb="tab"] {
-    background: #f1f5f9;
-    border-radius: 8px 8px 0 0;
-    padding: 8px 18px;
-    color: #475569;
-    font-weight: 500;
-    border: none;
-}
-.stTabs [aria-selected="true"] {
-    background: #0ea5e9 !important;
-    color: #ffffff !important;
-}
-
-/* Sidebar */
-section[data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid #e2e8f0; }
+.stApp{background:#0d1117;color:#e6edf3}
+.block-container{padding:.75rem 1.5rem 1rem}
+.lumi-header{background:#161b22;border:1px solid #30363d;border-left:4px solid #00d4ff;border-radius:8px;padding:14px 20px;margin-bottom:16px}
+.kpi{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px 16px}
+.kpi-lbl{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin:0}
+.kpi-val{font-size:24px;font-weight:600;margin:3px 0 2px}
+.kpi-sub{font-size:11px;color:#8b949e;margin:0}
+.kpi-green{color:#3fb950}.kpi-amber{color:#d29922}.kpi-red{color:#f85149}.kpi-blue{color:#58a6ff}.kpi-cyan{color:#00d4ff}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-green{background:#0d2c18;color:#3fb950;border:1px solid #1a4d2e}
+.badge-amber{background:#2d1f00;color:#d29922;border:1px solid #5a3e00}
+.badge-red{background:#2d0e0e;color:#f85149;border:1px solid #5a1e1e}
+.badge-cyan{background:#001a22;color:#00d4ff;border:1px solid #004466}
+.switch-log{background:#0d1117;border:1px solid #30363d;border-left:3px solid #00d4ff;border-radius:6px;padding:8px 14px;font-family:'Courier New',monospace;font-size:12px;color:#79c0ff;min-height:36px;margin:8px 0}
+.sec-hdr{font-size:12px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.08em;margin:14px 0 8px;border-bottom:1px solid #21262d;padding-bottom:5px}
+.stTabs [data-baseweb="tab-list"]{background:#161b22;border-bottom:1px solid #30363d;gap:4px}
+.stTabs [data-baseweb="tab"]{background:#0d1117;color:#8b949e;border-radius:6px 6px 0 0;padding:7px 16px;border:1px solid #30363d;border-bottom:none}
+.stTabs [aria-selected="true"]{background:#161b22 !important;color:#00d4ff !important;border-color:#00d4ff !important}
+section[data-testid="stSidebar"]{background:#0d1117;border-right:1px solid #30363d}
+.alert-error{background:#2d0e0e;border:1px solid #f85149;border-radius:6px;padding:8px 14px;color:#f85149;font-size:13px;margin:4px 0}
+.alert-warning{background:#2d1f00;border:1px solid #d29922;border-radius:6px;padding:8px 14px;color:#d29922;font-size:13px;margin:4px 0}
+.alert-info{background:#001a22;border:1px solid #00d4ff;border-radius:6px;padding:8px 14px;color:#00d4ff;font-size:13px;margin:4px 0}
 </style>
 """, unsafe_allow_html=True)
 
-# =============================================================================
-# STARTUP VALIDATION
-# =============================================================================
+DARK = dict(template="plotly_dark", paper_bgcolor="#161b22", plot_bgcolor="#0d1117",
+            font_color="#e6edf3", margin=dict(t=28,b=28,l=40,r=20))
+C = dict(solar="#FFB347", wind="#58a6ff", bess="#3fb950", elec="#bc8cff",
+         h2="#00d4ff", fc="#ff7b72", grid="#8b949e", ev="#79c0ff")
+def mk(**kw): return {**DARK, **kw}
+
 try:
     validate_config()
 except AssertionError as e:
-    st.error(f"❌ Config validation failed: {e}")
-    st.stop()
+    st.error(f"Config error: {e}"); st.stop()
 
-# =============================================================================
-# SESSION STATE — physics objects persist across reruns
-# =============================================================================
-def _init_state():
-    if "initialized" in st.session_state:
-        return
-    st.session_state.initialized = True
-
-    # Physics engines
-    st.session_state.solar      = SolarSystem()
-    st.session_state.wind       = WindSystem()
-    st.session_state.bess       = BatteryBESS(initial_soc=0.55)
+def _init():
+    if "lumi_init" in st.session_state: return
+    st.session_state.lumi_init    = True
+    st.session_state.solar        = SolarSystem()
+    st.session_state.wind         = WindSystem()
+    st.session_state.bess         = BatteryBESS(0.55)
     st.session_state.electrolyzer = ElectrolyzerS30()
-    st.session_state.h2_chain   = HydrogenStorageChain()
-    st.session_state.fuel_cell  = FuelCellAircell()
-    st.session_state.ems        = EMSBrain()
-    st.session_state.forecaster = AIPredictor()
-    st.session_state.weather    = WeatherProvider()
+    st.session_state.h2_chain     = HydrogenStorageChain()
+    st.session_state.fuel_cell    = FuelCellAircell()
+    st.session_state.ems          = EMSBrain()
+    st.session_state.forecaster   = AIPredictor()
+    st.session_state.weather      = WeatherProvider()
+    st.session_state.lcoh_acc     = LCOHAccumulator()
+    st.session_state.alerts       = AlertSystem()
+    st.session_state.history      = HistoryBuffer(maxlen=120)
+    st.session_state.engine       = TickEngine(
+        Config, st.session_state.solar, st.session_state.wind,
+        st.session_state.bess, st.session_state.electrolyzer,
+        st.session_state.h2_chain, st.session_state.fuel_cell,
+        st.session_state.ems, st.session_state.forecaster,
+        st.session_state.weather, st.session_state.lcoh_acc,
+        st.session_state.alerts)
+    st.session_state.sim_running  = True
+    st.session_state.last_state   = None
+    st.session_state.last_fc      = None
+_init()
 
-    # Time-series history (last 60 ticks)
-    st.session_state.history = pd.DataFrame(columns=[
-        "time", "solar_kw", "wind_kw", "total_gen_kw",
-        "bess_soc", "bess_temp", "bess_kw",
-        "elec_kw", "h2_kg_h", "elec_eff",
-        "buffer_pct", "main_tank_pct", "hrs_pct", "pressure_bar",
-        "fc_kw", "ev_kw", "grid_export_kw", "grid_import_kw",
-        "lcoh", "co2_saved", "revenue", "switching_event",
-    ])
-
-    # Accumulators
-    st.session_state.total_h2_kg    = 0.0
-    st.session_state.total_revenue  = 0.0
-    st.session_state.total_co2_kg   = 0.0
-    st.session_state.tick           = 0
-    st.session_state.sim_running    = True
-    st.session_state.last_forecast  = []
-    st.session_state.forecast_trained = False
-
-_init_state()
-
-# =============================================================================
-# SIDEBAR — simulation controls
-# =============================================================================
 with st.sidebar:
-    st.markdown("### ⚙️ Simulation Controls")
-    st.session_state.sim_running = st.toggle("▶ Live Simulation", value=st.session_state.sim_running)
-    refresh_rate = st.slider("Refresh interval (sec)", 1, 10, 3)
+    st.markdown("### ⚡ LUMINIH2 Control")
+    st.session_state.sim_running = st.toggle("Live simulation", value=st.session_state.sim_running)
+    refresh = st.slider("Refresh (sec)", 2, 15, 4)
     st.divider()
-
-    st.markdown("### 🌦 Manual Weather Override")
-    use_override = st.checkbox("Enable manual override")
-    if use_override:
-        man_irr   = st.slider("Irradiance (W/m²)", 0, 1000, 500)
-        man_wind  = st.slider("Wind speed (m/s)", 0.0, 25.0, 6.0, 0.1)
-        man_temp  = st.slider("Temperature (°C)", -10, 45, 20)
+    st.markdown("### 🌦 Weather Override")
+    use_ov = st.checkbox("Manual override")
+    ov = None
+    if use_ov:
+        ov = {"irradiance": st.slider("Irradiance W/m²", 0, 1000, 500),
+              "wind_ms":    st.slider("Wind m/s", 0.0, 25.0, 6.0, 0.1),
+              "temp_c":     st.slider("Temp °C", -10, 45, 20)}
     st.divider()
-
-    st.markdown("### 🔋 BESS Manual")
-    bess_force_charge = st.checkbox("Force BESS charge from grid")
+    st.markdown("### 🔋 EV & Grid")
+    ev_demand   = st.slider("EV demand (kW)", 0.0, Config.EV_CHARGER_POWER_KW, 10.0, 0.5)
+    force_bess  = st.checkbox("Force BESS charge from grid")
     st.divider()
-
-    st.markdown("### 📡 Info")
-    st.caption(f"Config v3.2 | Location: {Config.location.city}")
-    st.caption(f"Tick: {st.session_state.tick}")
-    if st.button("🔄 Reset Simulation"):
-        for k in list(st.session_state.keys()):
-            del st.session_state[k]
+    if st.button("🔄 Reset"):
+        for k in list(st.session_state.keys()): del st.session_state[k]
         st.rerun()
-
-# =============================================================================
-# PHYSICS TICK — runs once per rerun
-# =============================================================================
-zagreb_tz = pytz.timezone("Europe/Zagreb")
-now_dt = datetime.now(zagreb_tz)
+    st.caption(f"v4.0 · {Config.location.city}")
 
 if st.session_state.sim_running:
-    st.session_state.tick += 1
+    s, fc_res = st.session_state.engine.run(override=ov, ev_demand_kw=ev_demand,
+                                             force_bess_charge=force_bess)
+    st.session_state.history.append(s)
+    st.session_state.last_state = s
+    st.session_state.last_fc    = fc_res
 
-    # ── 1. Weather ────────────────────────────────────────────────────
-    if use_override:
-        wx_irr     = float(man_irr)
-        wx_wind    = float(man_wind)
-        wx_temp    = float(man_temp)
-        wx_soiling = 0.98
-        wx_turb    = 0.12
-        wx_history = [wx_irr] * 24
-    else:
-        wx = st.session_state.weather.fetch_current_data()
-        wx_irr     = wx.irradiance_raw_wm2
-        wx_wind    = wx.wind_speed_ms
-        wx_temp    = wx.temp_c
-        wx_soiling = wx.soiling_factor
-        wx_turb    = wx.turbulence_intensity
-        wx_history = wx.history_irradiance_24h
+s    = st.session_state.last_state
+hist = st.session_state.history.df
+alrt = st.session_state.alerts
 
-    # ── 2. Generation ─────────────────────────────────────────────────
-    solar_r = st.session_state.solar.get_power_output(wx_irr, wx_temp, wx_soiling)
-    wind_r  = st.session_state.wind.get_power_output(wx_wind, wx_turb)
-    solar_kw = solar_r.ac_power_kw
-    wind_kw  = wind_r.ac_power_kw
-    total_gen = solar_kw + wind_kw
+if s is None:
+    st.info("Starting…"); st.stop()
 
-    # ── 3. AI Forecast (train every 10 ticks, predict once per tick) ──
-    if st.session_state.tick % 10 == 1 and len(wx_history) >= 48:
-        st.session_state.forecaster.train_on_historical_data(wx_history * 3)
-        st.session_state.forecast_trained = True
+now_s = datetime.now(pytz.timezone("Europe/Zagreb")).strftime("%H:%M:%S")
 
-    forecast_result = st.session_state.forecaster.predict_future(
-        last_24h_data=wx_history, horizon_hours=6, current_dt=now_dt
-    )
-    st.session_state.last_forecast = forecast_result
-
-    # ── 4. EMS Power Switching ────────────────────────────────────────
-    bess = st.session_state.bess
-    ev_demand = Config.EV_CHARGER_POWER_KW * np.clip(np.random.beta(2, 3), 0, 1)
-    src_dec = st.session_state.ems.decide_energy_source(solar_kw, wind_kw, bess.soc)
-
-    incoming = total_gen + (Config.BATT_MAX_CHARGE_KW * 0.5 if bess_force_charge else 0.0)
-    flow = st.session_state.ems.manage_power_flow(
-        incoming_power_kw=incoming,
-        current_soc=bess.soc,
-        ev_demand_kw=ev_demand,
-        timestep_sec=Config.TIMESTEP_SEC,
-    )
-
-    # ── 5. BESS update ────────────────────────────────────────────────
-    net_bess = flow.power_to_battery_kw - (bess.get_max_discharge_power() * 0.1)
-    bess_r = bess.update_state(net_bess, ambient_temp_c=wx_temp)
-
-    # ── 6. Electrolyzer ───────────────────────────────────────────────
-    elec_r = st.session_state.electrolyzer.calculate_production(
-        flow.power_to_electrolyzer_kw, wx_temp
-    )
-
-    # ── 7. H₂ Storage chain ───────────────────────────────────────────
-    chain_r = st.session_state.h2_chain.manage_chain(elec_r.h2_kg_h, wx_temp)
-
-    # ── 8. Fuel Cell + Downstream ─────────────────────────────────────
-    fc_r  = st.session_state.fuel_cell.generate_power(chain_r.hrs_kg, ev_demand)
-    ds    = st.session_state.ems.manage_fc_and_grid(fc_r.p_out_kw, ev_demand)
-
-    # ── 9. Economics ─────────────────────────────────────────────────
-    econ = st.session_state.ems.calculate_economics(
-        elec_r.h2_kg_h * (Config.TIMESTEP_SEC / 3600),
-        flow.power_to_electrolyzer_kw,
-        src_dec.source,
-    )
-
-    # ── 10. Accumulators ──────────────────────────────────────────────
-    dt_h = Config.TIMESTEP_SEC / 3600
-    st.session_state.total_h2_kg   += elec_r.h2_kg_h * dt_h
-    st.session_state.total_revenue += ds.grid_revenue_eur + econ.subsidy_earned_eur
-    st.session_state.total_co2_kg  += econ.net_co2_saved_kg * dt_h
-
-    # ── 11. History append (keep last 60) ────────────────────────────
-    new_row = {
-        "time": now_dt.strftime("%H:%M:%S"),
-        "solar_kw": solar_kw, "wind_kw": wind_kw, "total_gen_kw": total_gen,
-        "bess_soc": bess_r.soc * 100, "bess_temp": bess_r.temperature_c, "bess_kw": flow.power_to_battery_kw,
-        "elec_kw": flow.power_to_electrolyzer_kw, "h2_kg_h": elec_r.h2_kg_h, "elec_eff": elec_r.efficiency * 100,
-        "buffer_pct": chain_r.buffer_fill_pct, "main_tank_pct": chain_r.main_fill_pct,
-        "hrs_pct": chain_r.hrs_fill_pct, "pressure_bar": chain_r.pressure_bar,
-        "fc_kw": fc_r.p_out_kw, "ev_kw": flow.power_to_ev_kw,
-        "grid_export_kw": flow.grid_export_kw, "grid_import_kw": flow.grid_import_kw,
-        "lcoh": econ.lcoh_eur_kg, "co2_saved": econ.net_co2_saved_kg,
-        "revenue": ds.grid_revenue_eur, "switching_event": flow.switching_event,
-    }
-    hist = st.session_state.history
-    st.session_state.history = pd.concat(
-        [hist, pd.DataFrame([new_row])], ignore_index=True
-    ).iloc[-60:]
-
-# Convenience aliases
-hist = st.session_state.history
-tick = st.session_state.tick
-last = hist.iloc[-1] if len(hist) > 0 else {}
-
-# =============================================================================
-# HEADER
-# =============================================================================
 st.markdown(f"""
 <div class="lumi-header">
-  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-    <div>
-      <div style="font-size:22px; font-weight:700; color:#0f172a;">⚡ LUMINIH2 Digital Twin</div>
-      <div style="font-size:13px; color:#64748b; margin-top:2px;">
-        Zagreb Energy Hub &nbsp;·&nbsp; Tick #{tick} &nbsp;·&nbsp; {now_dt.strftime('%A %d %b %Y')}
-      </div>
-    </div>
-    <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
-      <div style="text-align:right;">
-        <div style="font-size:24px; font-weight:700; color:#0f172a; letter-spacing:0.05em;">
-          {now_dt.strftime('%H:%M:%S')}
-        </div>
-        <div style="font-size:11px; color:#64748b;">Europe/Zagreb</div>
-      </div>
-      <div>
-        <span class="badge badge-green">● SYSTEM ACTIVE</span><br>
-        <span class="badge badge-blue" style="margin-top:4px; display:inline-block;">
-          SRC: {last.get('solar_kw', 0)+last.get('wind_kw', 0):.1f} kW
-        </span>
-      </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <div><span style="font-size:20px;font-weight:700;color:#00d4ff;">⚡ LUMINIH2</span>
+    <span style="font-size:13px;color:#8b949e;margin-left:10px;">Digital Twin v4.0 · Zagreb</span></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:22px;font-weight:700;letter-spacing:.06em;">{now_s}</span>
+      <span class="badge badge-cyan">● LIVE</span>
+      <span class="badge badge-green">Tick #{s.tick}</span>
+      <span class="badge {'badge-green' if s.wx_source=='live' else 'badge-amber'}">WX:{s.wx_source.upper()}</span>
     </div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-# =============================================================================
-# TOP KPI ROW
-# =============================================================================
-k1, k2, k3, k4, k5 = st.columns(5)
+for a in alrt.errors():
+    st.markdown(f'<div class="alert-error">🚨 {a.message}</div>', unsafe_allow_html=True)
+for a in alrt.warnings():
+    st.markdown(f'<div class="alert-warning">⚠ {a.message}</div>', unsafe_allow_html=True)
 
-def kpi(col, label, value, delta="", delta_dir="neu"):
-    col.markdown(f"""
-    <div class="kpi-card">
-      <p class="kpi-label">{label}</p>
-      <p class="kpi-value">{value}</p>
-      <p class="kpi-delta {delta_dir}">{delta}</p>
-    </div>
-    """, unsafe_allow_html=True)
+def kpi(col, lbl, val, sub="", cls="kpi-cyan"):
+    col.markdown(f'<div class="kpi"><p class="kpi-lbl">{lbl}</p>'
+                 f'<p class="kpi-val {cls}">{val}</p>'
+                 f'<p class="kpi-sub">{sub}</p></div>', unsafe_allow_html=True)
 
-kpi(k1, "Total Generation",
-    f"{last.get('total_gen_kw', 0):.1f} kW",
-    f"☀ {last.get('solar_kw',0):.1f} + 💨 {last.get('wind_kw',0):.1f}", "neu")
-kpi(k2, "BESS State of Charge",
-    f"{last.get('bess_soc', 0):.1f}%",
-    f"🌡 {last.get('bess_temp', 25):.1f}°C",
-    "up" if last.get('bess_soc', 50) > 50 else "down")
-kpi(k3, "H₂ Production",
-    f"{last.get('h2_kg_h', 0)*1000:.2f} g/h",
-    f"η = {last.get('elec_eff', 0):.1f}%", "up")
-kpi(k4, "Total H₂ Produced",
-    f"{st.session_state.total_h2_kg:.3f} kg",
-    f"CO₂ saved: {st.session_state.total_co2_kg:.2f} kg", "up")
-kpi(k5, "Revenue (session)",
-    f"€ {st.session_state.total_revenue:.3f}",
-    f"LCOH: €{last.get('lcoh', 0):.2f}/kg",
-    "up" if econ.is_profitable else "down")
+k = st.columns(6)
+kpi(k[0],"Generation",f"{s.total_gen_kw:.1f} kW",f"☀{s.solar_kw:.1f} + 💨{s.wind_kw:.1f}","kpi-amber")
+kpi(k[1],"BESS SoC",f"{s.bess_soc_pct:.1f}%",f"{s.bess_temp_c:.1f}°C · SoH {s.bess_soh_pct:.1f}%",
+    "kpi-green" if s.bess_soc_pct>40 else "kpi-red")
+kpi(k[2],"H₂ Rate",f"{s.h2_kg_h*1000:.1f} g/h",f"η {s.elec_eff_pct:.1f}%","kpi-cyan")
+kpi(k[3],"H₂ Today",f"{s.cum_h2_kg:.3f} kg",f"CO₂ {s.cum_co2_kg:.2f} kg saved","kpi-cyan")
+kpi(k[4],"LCOH",f"€{s.lcoh:.2f}/kg","✅ Target" if s.is_profitable else f"Target €{Config.LCOH_TARGET_EURO_KG}",
+    "kpi-green" if s.is_profitable else "kpi-amber")
+kpi(k[5],"Revenue",f"€{s.cum_revenue_eur:.2f}",f"Grid €{s.grid_rev_eur:.3f}/tick","kpi-green")
 
-# Power switching log
-st.markdown(f"""
-<div class="switch-log">
-⚡ EMS Switching → {last.get("switching_event", "Standby")}
-</div>
-""", unsafe_allow_html=True)
+st.markdown(f'<div class="switch-log">⚡ EMS → {s.switching_event}</div>', unsafe_allow_html=True)
 
-# Alert banners
-if bess_r.thermal_runaway_risk:
-    st.error("🔥 THERMAL RUNAWAY RISK — BESS emergency shutdown initiated!")
-elif bess_r.thermal_warning:
-    st.warning(f"⚠️ BESS temperature elevated: {bess_r.temperature_c:.1f}°C")
-if chain_r.leak_detected:
-    st.error("🚨 H₂ Leak Detected — mass balance anomaly in main tank!")
-if elec_r.stack_warning:
-    st.warning(f"⚠️ Electrolyzer SoH low: {elec_r.soh*100:.1f}%")
-if fc_r.h2_shortage:
-    st.info("ℹ️ Fuel cell operating below demand — H₂ supply limited.")
+tabs = st.tabs(["🌍 Acquisition","⚗️ Production","🔋 Storage","🔌 Distribution","📊 Analytics","🛡 Safety"])
 
-# =============================================================================
-# MAIN TABS
-# =============================================================================
-tabs = st.tabs([
-    "🌍 1. Acquisition",
-    "⚗️ 2. Production",
-    "🔋 3. Storage",
-    "🔌 4. Distribution",
-    "📊 5. Analytics",
-])
-THEME = "plotly_white"
+def hd(col=None):
+    if len(hist)<2: return False
+    if col and col in hist.columns: return hist[col].notna().any()
+    return True
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 1 — ACQUISITION
-# ─────────────────────────────────────────────────────────────────────────────
+# ── TAB 1 ──────────────────────────────────────────────────────────────────
 with tabs[0]:
-    c1, c2 = st.columns(2)
-
+    c1,c2 = st.columns(2)
     with c1:
-        st.markdown("#### 1. Live Generation Mix")
-        fig1 = px.pie(
-            values=[
-                max(0.01, last.get("solar_kw", 0)),
-                max(0.01, last.get("wind_kw", 0)),
-                max(0.01, last.get("grid_import_kw", 0)),
-            ],
-            names=["Solar PV", "Wind", "Grid Import"],
-            hole=0.6,
-            color_discrete_sequence=["#f59e0b", "#60a5fa", "#94a3b8"],
-        )
-        fig1.update_layout(template=THEME, height=280, margin=dict(t=10, b=10))
-        st.plotly_chart(fig1, use_container_width=True)
+        st.markdown('<p class="sec-hdr">Generation mix</p>', unsafe_allow_html=True)
+        fig = go.Figure(go.Pie(
+            values=[max(.01,s.solar_kw),max(.01,s.wind_kw),max(.01,s.grid_import_kw)],
+            labels=["Solar","Wind","Grid"],hole=0.65,
+            marker=dict(colors=[C["solar"],C["wind"],C["grid"]],
+                        line=dict(color="#0d1117",width=2))))
+        fig.add_annotation(text=f"<b>{s.total_gen_kw:.1f}</b><br>kW",showarrow=False,
+                          font=dict(size=14,color="#e6edf3"),x=0.5,y=0.5,xref="paper",yref="paper")
+        fig.update_layout(**mk(height=260,showlegend=True,legend=dict(orientation="h",y=-0.1,font_size=11)))
+        st.plotly_chart(fig,use_container_width=True)
 
-        st.markdown("#### 2. Solar Irradiance Timeline")
-        if len(hist) > 1:
-            fig2 = go.Figure()
-            fig2.add_trace(go.Scatter(
-                x=hist["time"], y=hist["solar_kw"],
-                fill="tozeroy", fillcolor="rgba(245,158,11,0.12)",
-                line=dict(color="#f59e0b", width=2), name="Solar kW",
-            ))
-            fig2.update_layout(template=THEME, height=220, margin=dict(t=10, b=10),
-                               xaxis_title="", yaxis_title="kW")
-            st.plotly_chart(fig2, use_container_width=True)
+        if hd("wx_irradiance"):
+            st.markdown('<p class="sec-hdr">Irradiance trend</p>', unsafe_allow_html=True)
+            f2=go.Figure()
+            f2.add_trace(go.Scatter(x=hist["time"],y=hist["wx_irradiance"],fill="tozeroy",
+                fillcolor="rgba(255,179,71,.12)",line=dict(color=C["solar"],width=2),name="W/m²"))
+            f2.update_layout(**mk(height=170,yaxis_title="W/m²"))
+            st.plotly_chart(f2,use_container_width=True)
 
     with c2:
-        st.markdown("#### 3. Wind Vector (Polar)")
-        wv = last.get("wind_kw", 5)
-        fig3 = go.Figure(go.Scatterpolar(
-            r=[wv, wv * 0.9, wv * 1.1, wv * 0.95, wv],
-            theta=[0, 72, 144, 216, 288],
-            fill="toself",
-            fillcolor="rgba(96,165,250,0.15)",
-            line=dict(color="#3b82f6"),
-        ))
-        fig3.update_layout(template=THEME, height=280, margin=dict(t=10, b=10))
-        st.plotly_chart(fig3, use_container_width=True)
-
-        st.markdown("#### 4. AI Forecast — Next 6 Hours")
-        fc = st.session_state.last_forecast
-        if fc and hasattr(fc, "points") and fc.points:
-            fc_df = pd.DataFrame({
-                "Hour": [f"+{p.hour_offset+1}h" for p in fc.points],
-                "Forecast": [p.value for p in fc.points],
-                "Upper": [p.upper_bound for p in fc.points],
-                "Lower": [p.lower_bound for p in fc.points],
-            })
-            fig4 = go.Figure()
-            fig4.add_trace(go.Scatter(
-                x=fc_df["Hour"], y=fc_df["Upper"],
-                line=dict(width=0), showlegend=False,
-            ))
-            fig4.add_trace(go.Scatter(
-                x=fc_df["Hour"], y=fc_df["Lower"],
-                fill="tonexty", fillcolor="rgba(14,165,233,0.12)",
-                line=dict(width=0), name="Confidence band",
-            ))
-            fig4.add_trace(go.Scatter(
-                x=fc_df["Hour"], y=fc_df["Forecast"],
-                line=dict(color="#0ea5e9", width=2), name="Forecast",
-                mode="lines+markers",
-            ))
-            fig4.update_layout(template=THEME, height=220, margin=dict(t=10, b=10),
-                               yaxis_title="W/m²")
-            st.plotly_chart(fig4, use_container_width=True)
+        st.markdown('<p class="sec-hdr">AI forecast — 6 h</p>', unsafe_allow_html=True)
+        fc=st.session_state.last_fc
+        if fc and hasattr(fc,"points") and fc.points:
+            fdf=pd.DataFrame({"h":[f"+{p.hour_offset+1}h" for p in fc.points],
+                              "v":[p.value for p in fc.points],
+                              "lo":[p.lower_bound for p in fc.points],
+                              "hi":[p.upper_bound for p in fc.points]})
+            f3=go.Figure()
+            f3.add_trace(go.Scatter(x=fdf["h"],y=fdf["hi"],line=dict(width=0),showlegend=False))
+            f3.add_trace(go.Scatter(x=fdf["h"],y=fdf["lo"],fill="tonexty",
+                fillcolor="rgba(0,212,255,.10)",line=dict(width=0),name="Confidence"))
+            f3.add_trace(go.Scatter(x=fdf["h"],y=fdf["v"],line=dict(color=C["h2"],width=2),
+                mode="lines+markers",marker=dict(size=5),name="Forecast"))
+            f3.update_layout(**mk(height=220,yaxis_title="W/m²"))
+            st.plotly_chart(f3,use_container_width=True)
         else:
-            st.info("Forecaster training — data accumulating...")
+            st.info("Accumulating data for AI training…")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 2 — PRODUCTION
-# ─────────────────────────────────────────────────────────────────────────────
+        st.markdown('<p class="sec-hdr">Weather telemetry</p>', unsafe_allow_html=True)
+        wc=st.columns(3)
+        wc[0].metric("Temp",f"{s.wx_temp_c:.1f}°C")
+        wc[1].metric("Wind",f"{s.wx_wind_ms:.1f} m/s")
+        wc[2].metric("Humidity",f"{s.wx_humidity:.0f}%")
+        wc2=st.columns(3)
+        wc2[0].metric("Irradiance",f"{s.wx_irradiance:.0f} W/m²")
+        wc2[1].metric("Soiling",f"{s.wx_soiling:.3f}")
+        wc2[2].metric("Precip",f"{s.wx_precip_mm:.1f} mm")
+
+# ── TAB 2 ──────────────────────────────────────────────────────────────────
 with tabs[1]:
-    c1, c2 = st.columns(2)
-
+    c1,c2=st.columns(2)
     with c1:
-        st.markdown("#### 5. Power Flow Allocation")
-        if len(hist) > 1:
-            SERIES = [
-                ("bess_kw",        "#10b981", "rgba(16,185,129,0.7)",  "BESS"),
-                ("elec_kw",        "#8b5cf6", "rgba(139,92,246,0.7)",  "Electrolyzer"),
-                ("ev_kw",          "#3b82f6", "rgba(59,130,246,0.7)",  "EV Charger"),
-                ("grid_export_kw", "#f59e0b", "rgba(245,158,11,0.7)",  "Grid Export"),
-            ]
-            fig5 = go.Figure()
-            for col, color, fill, name in SERIES:
-                fig5.add_trace(go.Scatter(
-                    x=hist["time"], y=hist[col],
-                    stackgroup="one", name=name,
-                    line=dict(color=color, width=1),
-                    fillcolor=fill,
-                ))
-            fig5.update_layout(template=THEME, height=260, margin=dict(t=10, b=10),
-                               yaxis_title="kW")
-            st.plotly_chart(fig5, use_container_width=True)
+        st.markdown('<p class="sec-hdr">Power allocation</p>', unsafe_allow_html=True)
+        if hd():
+            f5=go.Figure()
+            SERIES=[("bess_charge_kw",C["bess"],"rgba(63,185,80,.6)","BESS charge"),
+                    ("elec_kw",C["elec"],"rgba(188,140,255,.6)","Electrolyzer"),
+                    ("ev_kw",C["ev"],"rgba(121,192,255,.6)","EV charger"),
+                    ("grid_export_kw",C["grid"],"rgba(139,148,158,.6)","Grid export")]
+            for col,color,fill,name in SERIES:
+                if col in hist.columns:
+                    f5.add_trace(go.Scatter(x=hist["time"],y=hist[col],stackgroup="one",
+                        name=name,line=dict(color=color,width=1),fillcolor=fill))
+            f5.update_layout(**mk(height=240,yaxis_title="kW"))
+            st.plotly_chart(f5,use_container_width=True)
 
-        st.markdown("#### 6. Electrolyzer Stack Health")
-        fig6 = go.Figure(go.Indicator(
-            mode="gauge+number+delta",
-            value=elec_r.soh * 100,
-            delta={"reference": 100},
-            title={"text": "Stack SoH (%)"},
-            gauge={
-                "axis": {"range": [70, 100]},
-                "bar": {"color": "#8b5cf6"},
-                "steps": [
-                    {"range": [70, 80], "color": "#fee2e2"},
-                    {"range": [80, 90], "color": "#fef9c3"},
-                    {"range": [90, 100], "color": "#dcfce7"},
-                ],
-                "threshold": {"line": {"color": "#ef4444", "width": 2}, "value": 80},
-            },
-        ))
-        fig6.update_layout(template=THEME, height=240, margin=dict(t=30, b=10))
-        st.plotly_chart(fig6, use_container_width=True)
+        st.markdown('<p class="sec-hdr">Stack SoH</p>', unsafe_allow_html=True)
+        f6=go.Figure(go.Indicator(mode="gauge+number",value=s.elec_soh_pct,
+            title={"text":"Stack SoH (%)"},
+            gauge={"axis":{"range":[70,100],"tickcolor":"#8b949e"},"bar":{"color":C["elec"]},
+                   "bgcolor":"#161b22",
+                   "steps":[{"range":[70,80],"color":"#2d0e0e"},{"range":[80,90],"color":"#2d1f00"},
+                             {"range":[90,100],"color":"#0d2c18"}],
+                   "threshold":{"line":{"color":C["fc"],"width":2},"value":80}}))
+        f6.update_layout(**mk(height=200))
+        st.plotly_chart(f6,use_container_width=True)
 
     with c2:
-        st.markdown("#### 7. H₂ Production Rate")
-        if len(hist) > 1:
-            fig7 = go.Figure()
-            fig7.add_trace(go.Bar(
-                x=hist["time"], y=hist["h2_kg_h"] * 1000,
-                marker_color="#8b5cf6", name="g/h",
-            ))
-            fig7.update_layout(template=THEME, height=220, margin=dict(t=10, b=10),
-                               yaxis_title="g H₂/h")
-            st.plotly_chart(fig7, use_container_width=True)
+        if hd("h2_kg_h"):
+            st.markdown('<p class="sec-hdr">H₂ production</p>', unsafe_allow_html=True)
+            f7=go.Figure()
+            f7.add_trace(go.Bar(x=hist["time"],y=(hist["h2_kg_h"]*1000).round(2),
+                marker_color=C["h2"],marker_line_width=0,name="g/h"))
+            f7.update_layout(**mk(height=200,yaxis_title="g H₂/h"))
+            st.plotly_chart(f7,use_container_width=True)
 
-        st.markdown("#### 8. Electrolyzer Efficiency vs Load")
-        if len(hist) > 3:
-            fig8 = px.scatter(
-                hist, x="elec_kw", y="elec_eff",
-                color="h2_kg_h",
-                color_continuous_scale="Purples",
-                labels={"elec_kw": "Power (kW)", "elec_eff": "Efficiency (%)"},
-            )
-            fig8.update_layout(template=THEME, height=240, margin=dict(t=10, b=10))
-            st.plotly_chart(fig8, use_container_width=True)
+        if hd("elec_eff_pct") and len(hist)>5:
+            st.markdown('<p class="sec-hdr">Efficiency vs load</p>', unsafe_allow_html=True)
+            f8=px.scatter(hist,x="elec_kw",y="elec_eff_pct",color="h2_kg_h",
+                color_continuous_scale=[[0,"#161b22"],[1,C["h2"]]],
+                labels={"elec_kw":"Power (kW)","elec_eff_pct":"Efficiency (%)"})
+            f8.update_layout(**mk(height=180))
+            st.plotly_chart(f8,use_container_width=True)
 
-        col_a, col_b = st.columns(2)
-        col_a.metric("Purity", f"{elec_r.purity_pct:.4f}%", "ISO 14687")
-        col_b.metric("Water use", f"{elec_r.water_l_h:.3f} L/h", "per kg H₂")
+        ec=st.columns(3)
+        ec[0].metric("Purity",f"{s.elec_purity:.4f}%")
+        ec[1].metric("Water",f"{s.water_l_h:.3f} L/h")
+        ec[2].metric("Heat rec.",f"{s.heat_kw:.2f} kW")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 3 — STORAGE
-# ─────────────────────────────────────────────────────────────────────────────
+# ── TAB 3 ──────────────────────────────────────────────────────────────────
 with tabs[2]:
-    c1, c2 = st.columns(2)
-
+    c1,c2=st.columns(2)
     with c1:
-        st.markdown("#### 9. BESS State of Charge")
-        fig9 = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=bess_r.soc * 100,
-            title={"text": "SoC (%)"},
-            gauge={
-                "axis": {"range": [0, 100]},
-                "bar": {"color": "#10b981"},
-                "steps": [
-                    {"range": [0, Config.BATT_SOC_MIN * 100], "color": "#fee2e2"},
-                    {"range": [Config.BATT_SOC_MIN * 100, Config.BATT_SOC_MAX * 100], "color": "#f0fdf4"},
-                ],
-                "threshold": {"line": {"color": "#ef4444", "width": 2},
-                              "value": Config.BATT_SOC_MIN * 100},
-            },
-        ))
-        fig9.update_layout(template=THEME, height=240, margin=dict(t=30, b=10))
-        st.plotly_chart(fig9, use_container_width=True)
+        st.markdown('<p class="sec-hdr">BESS state of charge</p>', unsafe_allow_html=True)
+        f9=go.Figure(go.Indicator(mode="gauge+number+delta",value=s.bess_soc_pct,
+            delta={"reference":55.0,"valueformat":".1f"},title={"text":"SoC (%)"},
+            gauge={"axis":{"range":[0,100],"tickcolor":"#8b949e"},"bar":{"color":C["bess"]},
+                   "bgcolor":"#161b22",
+                   "steps":[{"range":[0,Config.BATT_SOC_MIN*100],"color":"#2d0e0e"},
+                             {"range":[Config.BATT_SOC_MIN*100,Config.BATT_SOC_MAX*100],"color":"#0d2c18"}],
+                   "threshold":{"line":{"color":C["fc"],"width":2},"value":Config.BATT_SOC_MIN*100}}))
+        f9.update_layout(**mk(height=230))
+        st.plotly_chart(f9,use_container_width=True)
 
-        st.markdown("#### 10. BESS Temperature")
-        if len(hist) > 1:
-            fig10 = go.Figure()
-            fig10.add_trace(go.Scatter(
-                x=hist["time"], y=hist["bess_temp"],
-                line=dict(color="#ef4444", width=2), name="Temp °C",
-            ))
-            fig10.add_hline(y=55, line_dash="dash", line_color="#f97316",
-                           annotation_text="Warning 55°C")
-            fig10.add_hline(y=Config.THERMAL_RUNAWAY_TEMP, line_dash="dash",
-                           line_color="#ef4444", annotation_text="Runaway limit")
-            fig10.update_layout(template=THEME, height=200, margin=dict(t=10, b=10),
-                               yaxis_title="°C")
-            st.plotly_chart(fig10, use_container_width=True)
+        if hd("bess_temp_c"):
+            st.markdown('<p class="sec-hdr">BESS temperature</p>', unsafe_allow_html=True)
+            f10=go.Figure()
+            f10.add_trace(go.Scatter(x=hist["time"],y=hist["bess_temp_c"],
+                line=dict(color=C["fc"],width=2),name="°C"))
+            f10.add_hline(y=55,line_dash="dash",line_color=C["solar"],annotation_text="⚠55°C")
+            f10.add_hline(y=Config.THERMAL_RUNAWAY_TEMP,line_dash="dash",
+                line_color=C["fc"],annotation_text="🔥Runaway")
+            f10.update_layout(**mk(height=170,yaxis_title="°C"))
+            st.plotly_chart(f10,use_container_width=True)
 
     with c2:
-        st.markdown("#### 11. Hydrogen Tank Levels")
-        tanks = {
-            "Buffer": chain_r.buffer_fill_pct,
-            "Main Tank": chain_r.main_fill_pct,
-            "HRS Station": chain_r.hrs_fill_pct,
-        }
-        fig11 = go.Figure(go.Bar(
-            x=list(tanks.keys()), y=list(tanks.values()),
-            marker_color=["#60a5fa", "#8b5cf6", "#10b981"],
-            text=[f"{v:.1f}%" for v in tanks.values()],
-            textposition="outside",
-        ))
-        fig11.update_layout(template=THEME, height=240, yaxis_range=[0, 110],
-                           margin=dict(t=10, b=10), yaxis_title="%")
-        st.plotly_chart(fig11, use_container_width=True)
+        st.markdown('<p class="sec-hdr">Hydrogen tank levels</p>', unsafe_allow_html=True)
+        f11=go.Figure(go.Bar(x=["Buffer","Main Tank","HRS Station"],
+            y=[s.buffer_pct,s.main_tank_pct,s.hrs_pct],
+            marker_color=[C["h2"],C["elec"],C["bess"]],marker_line_width=0,
+            text=[f"{v:.1f}%" for v in [s.buffer_pct,s.main_tank_pct,s.hrs_pct]],
+            textposition="outside"))
+        f11.update_layout(**mk(height=230,yaxis_range=[0,115],yaxis_title="%"))
+        st.plotly_chart(f11,use_container_width=True)
 
-        st.markdown("#### 12. Main Tank Pressure")
-        fig12 = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=chain_r.pressure_bar,
-            title={"text": "Pressure (bar)"},
-            gauge={
-                "axis": {"range": [0, Config.SAFETY_MAX_PRESSURE_BAR]},
-                "bar": {"color": "#3b82f6"},
-                "threshold": {"line": {"color": "#ef4444", "width": 2},
-                              "value": Config.SAFETY_MAX_PRESSURE_BAR * 0.9},
-            },
-        ))
-        fig12.update_layout(template=THEME, height=200, margin=dict(t=30, b=10))
-        st.plotly_chart(fig12, use_container_width=True)
+        f12=go.Figure(go.Indicator(mode="gauge+number",value=s.pressure_bar,
+            title={"text":"Pressure (bar)"},
+            gauge={"axis":{"range":[0,Config.SAFETY_MAX_PRESSURE_BAR],"tickcolor":"#8b949e"},
+                   "bar":{"color":C["wind"]},"bgcolor":"#161b22",
+                   "threshold":{"line":{"color":C["fc"],"width":2},
+                                "value":Config.SAFETY_MAX_PRESSURE_BAR*.90}}))
+        f12.update_layout(**mk(height=170))
+        st.plotly_chart(f12,use_container_width=True)
 
-        comp_badge = "badge-green" if chain_r.compressor_active else "badge-yellow"
-        comp_text  = "ON" if chain_r.compressor_active else "STANDBY"
-        st.markdown(f'Compressor: <span class="badge {comp_badge}">● {comp_text}</span> '
-                   f'({chain_r.compressor_runtime_sec}s runtime)', unsafe_allow_html=True)
+        comp_cls="badge-green" if s.compressor_on else "badge-amber"
+        st.markdown(f'Compressor: <span class="badge {comp_cls}">{"● ON" if s.compressor_on else "○ STANDBY"}</span>'
+                   f' | Tank {s.tank_temp_c:.1f}°C',unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 4 — DISTRIBUTION
-# ─────────────────────────────────────────────────────────────────────────────
+# ── TAB 4 ──────────────────────────────────────────────────────────────────
 with tabs[3]:
-    c1, c2 = st.columns(2)
-
+    c1,c2=st.columns(2)
     with c1:
-        st.markdown("#### 13. HRS 5 kg Station")
-        hrs_pct = chain_r.hrs_fill_pct / 100
-        st.progress(min(hrs_pct, 1.0))
-        st.caption(f"{chain_r.hrs_kg:.3f} / {Config.HRS_H2_TANK_CAPACITY_KG:.1f} kg "
-                  f"({chain_r.hrs_fill_pct:.1f}%)")
-        badge_hrs = "badge-green" if chain_r.hrs_fill_pct > 60 else "badge-yellow"
-        st.markdown(f'Status: <span class="badge {badge_hrs}">'
-                   f'{"● READY" if chain_r.hrs_fill_pct > 60 else "▼ FILLING"}</span>',
+        st.markdown('<p class="sec-hdr">HRS 5 kg station</p>', unsafe_allow_html=True)
+        st.progress(min(s.hrs_pct/100,1.0))
+        hrs_c="badge-green" if s.hrs_pct>60 else "badge-amber"
+        st.markdown(f'{s.hrs_pct:.1f}% | <span class="badge {hrs_c}">'
+                   f'{"● READY" if s.hrs_pct>60 else "▼ FILLING"}</span>',unsafe_allow_html=True)
+
+        f14=go.Figure(go.Indicator(mode="gauge+number",value=s.fc_kw,
+            title={"text":f"Fuel cell (kW)  η={s.fc_eff_pct:.1f}%"},
+            gauge={"axis":{"range":[0,Config.FC_POWER_NOM_KW*1.1],"tickcolor":"#8b949e"},
+                   "bar":{"color":C["bess"]},"bgcolor":"#161b22"}))
+        f14.update_layout(**mk(height=220))
+        st.plotly_chart(f14,use_container_width=True)
+
+    with c2:
+        if hd("grid_export_kw"):
+            st.markdown('<p class="sec-hdr">Grid export vs EV</p>', unsafe_allow_html=True)
+            f15=go.Figure()
+            f15.add_trace(go.Scatter(x=hist["time"],y=hist["grid_export_kw"],fill="tozeroy",
+                fillcolor="rgba(139,148,158,.2)",line=dict(color=C["grid"],width=2),name="Grid export"))
+            f15.add_trace(go.Scatter(x=hist["time"],y=hist["ev_kw"],fill="tozeroy",
+                fillcolor="rgba(121,192,255,.2)",line=dict(color=C["ev"],width=2),name="EV load"))
+            f15.update_layout(**mk(height=210,yaxis_title="kW"))
+            st.plotly_chart(f15,use_container_width=True)
+
+        f16=go.Figure(go.Pie(
+            values=[max(.01,s.ev_kw),max(.01,s.grid_export_kw),max(.01,s.heat_kw)],
+            labels=["EV","Grid","Heat"],hole=0.55,
+            marker=dict(colors=[C["ev"],C["grid"],C["solar"]],
+                        line=dict(color="#0d1117",width=2))))
+        f16.update_layout(**mk(height=210,legend=dict(orientation="h",y=-0.15,font_size=11)))
+        st.plotly_chart(f16,use_container_width=True)
+
+# ── TAB 5 ──────────────────────────────────────────────────────────────────
+with tabs[4]:
+    sv=max(.1,s.solar_kw); wv=max(.1,s.wind_kw)
+    bv=max(.1,s.bess_charge_kw); ev2=max(.1,s.elec_kw)
+    evv=max(.1,s.ev_kw); gv=max(.1,s.grid_export_kw)
+    f17=go.Figure(go.Sankey(arrangement="snap",
+        node=dict(label=["Solar","Wind","BESS","Electrolyzer","H₂ Tank","EV","Grid"],
+                  color=[C["solar"],C["wind"],C["bess"],C["elec"],C["h2"],C["ev"],C["grid"]],
+                  pad=20,thickness=18,line=dict(color="#0d1117",width=.5)),
+        link=dict(source=[0,1,0,1,2,3,4,4],target=[2,2,3,3,3,4,5,6],
+                  value=[sv*.4,wv*.4,sv*.6,wv*.6,bv*.2,ev2,evv,gv],
+                  color=["rgba(255,179,71,.25)","rgba(88,166,255,.25)",
+                         "rgba(255,179,71,.25)","rgba(88,166,255,.25)",
+                         "rgba(63,185,80,.2)","rgba(188,140,255,.25)",
+                         "rgba(0,212,255,.25)","rgba(139,148,158,.2)"])))
+    f17.update_layout(**mk(height=320))
+    st.plotly_chart(f17,use_container_width=True)
+
+    ac=st.columns(3)
+    with ac[0]:
+        if hd("lcoh") and hist["lcoh"].max()>0:
+            f18=go.Figure()
+            f18.add_trace(go.Scatter(x=hist["time"],y=hist["lcoh"],
+                line=dict(color=C["elec"],width=2),name="LCOH"))
+            f18.add_hline(y=Config.LCOH_TARGET_EURO_KG,line_dash="dash",line_color=C["bess"],
+                annotation_text=f"Target {Config.LCOH_TARGET_EURO_KG}€",annotation_font_color=C["bess"])
+            f18.update_layout(**mk(height=190,yaxis_title="€/kg"))
+            st.plotly_chart(f18,use_container_width=True)
+        lcls="kpi-green" if s.is_profitable else "kpi-amber"
+        st.markdown(f'<p class="kpi-val {lcls}" style="font-size:18px">€{s.lcoh:.3f}/kg</p>',unsafe_allow_html=True)
+
+    with ac[1]:
+        if hd("co2_saved_kg"):
+            f19=go.Figure(go.Bar(x=hist["time"],y=(hist["co2_saved_kg"]*1000).round(2),
+                marker_color=C["bess"],marker_line_width=0))
+            f19.update_layout(**mk(height=190,yaxis_title="g CO₂"))
+            st.plotly_chart(f19,use_container_width=True)
+        st.metric("CO₂ saved",f"{s.cum_co2_kg:.3f} kg")
+
+    with ac[2]:
+        st.metric("Total revenue",f"€{s.cum_revenue_eur:.3f}")
+        st.metric("H₂ produced",f"{s.cum_h2_kg*1000:.1f} g")
+        st.metric("Water used",f"{s.cum_water_l:.2f} L")
+        st.metric("H₂ subsidy",f"€{s.cum_h2_kg*Config.GREEN_H2_SUBSIDY:.3f}")
+
+# ── TAB 6 ──────────────────────────────────────────────────────────────────
+with tabs[5]:
+    c1,c2=st.columns(2)
+    with c1:
+        st.markdown('<p class="sec-hdr">Health matrix</p>', unsafe_allow_html=True)
+        def hrow(lbl,val,unit,ok,warn,fmt=".1f"):
+            v=float(val)
+            if ok[0]<=v<=ok[1]: cls,ic="kpi-green","●"
+            elif warn[0]<=v<=warn[1]: cls,ic="kpi-amber","▲"
+            else: cls,ic="kpi-red","✖"
+            st.markdown(f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d;">'
+                       f'<span style="color:#8b949e;font-size:13px;">{lbl}</span>'
+                       f'<span class="kpi-val {cls}" style="font-size:14px;">{ic} {v:{fmt}} {unit}</span></div>',
+                       unsafe_allow_html=True)
+        hrow("BESS SoC",s.bess_soc_pct,"%",(20,90),(15,95))
+        hrow("BESS Temp",s.bess_temp_c,"°C",(10,45),(0,55))
+        hrow("BESS SoH",s.bess_soh_pct,"%",(85,100),(75,100))
+        hrow("Stack SoH",s.elec_soh_pct,"%",(85,100),(75,100))
+        hrow("Pressure",s.pressure_bar,"bar",(30,600),(20,680))
+        hrow("Tank Temp",s.tank_temp_c,"°C",(15,60),(10,75))
+        hrow("H₂ Purity",s.elec_purity,"%",(99.99,100),(99.9,100),".4f")
+
+    with c2:
+        st.markdown('<p class="sec-hdr">Active alerts</p>', unsafe_allow_html=True)
+        if not alrt.active:
+            st.markdown('<div class="alert-info">✅ All systems nominal</div>',unsafe_allow_html=True)
+        else:
+            for a in alrt.active:
+                cls={"error":"alert-error","warning":"alert-warning","info":"alert-info"}.get(a.level,"alert-info")
+                ic={"error":"🚨","warning":"⚠","info":"ℹ"}.get(a.level,"ℹ")
+                st.markdown(f'<div class="{cls}">{ic} <b>[{a.code}]</b> {a.message}'
+                           f'<span style="float:right;opacity:.5">{a.ts}</span></div>',unsafe_allow_html=True)
+
+        st.markdown('<p class="sec-hdr">Thresholds</p>', unsafe_allow_html=True)
+        st.caption(f"Thermal runaway: {Config.THERMAL_RUNAWAY_TEMP}°C")
+        st.caption(f"Max pressure: {Config.SAFETY_MAX_PRESSURE_BAR} bar")
+        st.caption(f"Emergency SoC: {Config.EMERGENCY_SHUTDOWN_SOC*100:.0f}%")
+        st.caption(f"Leak threshold: {Config.LEAK_DETECTION_THRESHOLD} kg/h")
+
+        ld_c="badge-red" if s.leak_detected else "badge-green"
+        st.markdown(f'<br><span class="badge {ld_c}" style="font-size:13px;padding:6px 14px;">'
+                   f'{"⚠ LEAK DETECTED" if s.leak_detected else "✅ No leak"}</span>',
                    unsafe_allow_html=True)
 
-        st.markdown("#### 14. Fuel Cell Output")
-        fig14 = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=fc_r.p_out_kw,
-            title={"text": "FC Power (kW)"},
-            gauge={
-                "axis": {"range": [0, Config.FC_POWER_NOM_KW * 1.1]},
-                "bar": {"color": "#10b981"},
-            },
-        ))
-        fig14.update_layout(template=THEME, height=220, margin=dict(t=30, b=10))
-        st.plotly_chart(fig14, use_container_width=True)
-        st.caption(f"η = {fc_r.efficiency*100:.1f}% | H₂ used: {fc_r.h2_used_kg*1000:.4f} g/step")
-
-    with c2:
-        st.markdown("#### 15. Grid Export vs EV Load")
-        if len(hist) > 1:
-            fig15 = go.Figure()
-            fig15.add_trace(go.Scatter(x=hist["time"], y=hist["grid_export_kw"],
-                                      fill="tozeroy", name="Grid export",
-                                      line=dict(color="#f59e0b")))
-            fig15.add_trace(go.Scatter(x=hist["time"], y=hist["ev_kw"],
-                                      fill="tozeroy", name="EV load",
-                                      line=dict(color="#3b82f6")))
-            fig15.update_layout(template=THEME, height=240, margin=dict(t=10, b=10),
-                               yaxis_title="kW")
-            st.plotly_chart(fig15, use_container_width=True)
-
-        st.markdown("#### 16. Downstream Split")
-        fig16 = px.pie(
-            values=[
-                max(0.01, last.get("ev_kw", 0)),
-                max(0.01, last.get("grid_export_kw", 0)),
-                max(0.01, fc_r.heat_recovered_kw),
-            ],
-            names=["EV Charging", "Grid Export", "Heat Recovery"],
-            color_discrete_sequence=["#3b82f6", "#f59e0b", "#f97316"],
-            hole=0.5,
-        )
-        fig16.update_layout(template=THEME, height=240, margin=dict(t=10, b=10))
-        st.plotly_chart(fig16, use_container_width=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 5 — ANALYTICS
-# ─────────────────────────────────────────────────────────────────────────────
-with tabs[4]:
-    st.markdown("#### 17. Energy Flow — Sankey")
-    s_kw  = max(0.01, last.get("solar_kw", 0))
-    w_kw  = max(0.01, last.get("wind_kw", 0))
-    b_kw  = max(0.01, last.get("bess_kw", 0))
-    e_kw  = max(0.01, last.get("elec_kw", 0))
-    ev_kw = max(0.01, last.get("ev_kw", 0))
-    g_kw  = max(0.01, last.get("grid_export_kw", 0))
-
-    fig17 = go.Figure(go.Sankey(
-        arrangement="snap",
-        node=dict(
-            label=["Solar PV", "Wind", "BESS", "Electrolyzer", "H₂ Storage", "EV Station", "Grid"],
-            color=["#f59e0b", "#60a5fa", "#10b981", "#8b5cf6", "#a78bfa", "#3b82f6", "#94a3b8"],
-            pad=15, thickness=20,
-        ),
-        link=dict(
-            source=[0, 1, 0, 1, 2, 3, 4, 4],
-            target=[2, 2, 3, 3, 3, 4, 5, 6],
-            value=[s_kw * 0.4, w_kw * 0.4, s_kw * 0.6, w_kw * 0.6,
-                   b_kw * 0.2, e_kw, ev_kw, g_kw],
-            color=["rgba(245,158,11,0.3)"] * 4 + ["rgba(16,185,129,0.3)",
-                   "rgba(139,92,246,0.3)", "rgba(59,130,246,0.3)", "rgba(148,163,184,0.3)"],
-        ),
-    ))
-    fig17.update_layout(template=THEME, height=360, margin=dict(t=10, b=10))
-    st.plotly_chart(fig17, use_container_width=True)
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-        st.markdown("#### 18. LCOH Trend")
-        if len(hist) > 1 and hist["lcoh"].max() > 0:
-            fig18 = px.line(hist, x="time", y="lcoh",
-                           labels={"lcoh": "€/kg", "time": ""},
-                           color_discrete_sequence=["#8b5cf6"])
-            fig18.add_hline(y=Config.LCOH_TARGET_EURO_KG, line_dash="dash",
-                           line_color="#10b981", annotation_text=f"Target {Config.LCOH_TARGET_EURO_KG} €/kg")
-            fig18.update_layout(template=THEME, height=220, margin=dict(t=10, b=10))
-            st.plotly_chart(fig18, use_container_width=True)
-        st.metric("Current LCOH", f"€ {last.get('lcoh', 0):.3f}/kg",
-                 "✅ Target met" if econ.is_profitable else "⚠ Above target")
-
-    with c2:
-        st.markdown("#### 19. CO₂ Abatement")
-        if len(hist) > 1:
-            fig19 = go.Figure(go.Bar(
-                x=hist["time"], y=hist["co2_saved"],
-                marker_color="#10b981", name="kg CO₂ saved",
-            ))
-            fig19.update_layout(template=THEME, height=220, margin=dict(t=10, b=10),
-                               yaxis_title="kg CO₂")
-            st.plotly_chart(fig19, use_container_width=True)
-        st.metric("Session total", f"{st.session_state.total_co2_kg:.2f} kg saved",
-                 f"≈ {st.session_state.total_co2_kg / 12:.3f} kg H₂ equivalent")
-
-    with c3:
-        st.markdown("#### 20. Financial Summary")
-        rev = st.session_state.total_revenue
-        h2v = st.session_state.total_h2_kg * Config.GREEN_H2_SUBSIDY
-        st.metric("Grid revenue", f"€ {rev:.3f}")
-        st.metric("H₂ subsidy value", f"€ {h2v:.3f}")
-        st.metric("Total H₂ produced", f"{st.session_state.total_h2_kg*1000:.1f} g")
-
-        profitable_ticks = int(((hist["lcoh"] > 0) & (hist["lcoh"] <= Config.LCOH_TARGET_EURO_KG)).sum()) if len(hist) > 0 else 0
-        st.caption(f"Profitable ticks: {profitable_ticks} / {len(hist)}")
-
-# =============================================================================
-# AUTO-REFRESH
-# =============================================================================
-time.sleep(refresh_rate)
-st.rerun()
+# ── AUTO REFRESH ───────────────────────────────────────────────────────────
+try:
+    from streamlit_autorefresh import st_autorefresh
+    st_autorefresh(interval=refresh*1000, key="lumi_r")
+except ImportError:
+    import time; time.sleep(refresh); st.rerun()
