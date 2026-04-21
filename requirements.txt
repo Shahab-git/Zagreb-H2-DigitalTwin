@@ -1,7 +1,7 @@
-streamlit
-pandas
-plotly
-numpy
-pytz
-statsmodels
-scipy
+streamlit>=1.35.0
+pandas>=2.0.0
+numpy>=1.26.0
+plotly>=5.20.0
+scikit-learn>=1.4.0
+requests>=2.31.0
+pytz>=2024.1
