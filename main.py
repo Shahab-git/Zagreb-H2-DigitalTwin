@@ -741,7 +741,7 @@ with tabs[4]:
         st.metric("H₂ subsidy value", f"€ {h2v:.3f}")
         st.metric("Total H₂ produced", f"{st.session_state.total_h2_kg*1000:.1f} g")
 
-        profitable_ticks = int((hist["lcoh"] > 0) & (hist["lcoh"] <= Config.LCOH_TARGET_EURO_KG)).sum() if len(hist) > 0 else 0
+        profitable_ticks = int(((hist["lcoh"] > 0) & (hist["lcoh"] <= Config.LCOH_TARGET_EURO_KG)).sum()) if len(hist) > 0 else 0
         st.caption(f"Profitable ticks: {profitable_ticks} / {len(hist)}")
 
 # =============================================================================
