@@ -60,7 +60,7 @@ class SolarPV:
     isc_a:               float = 9.67        # A short-circuit
     imp_a:               float = 9.10        # A at MPP
     # System
-    total_capacity_kw:   float = 11.52       # 32 × 360W / 1000
+    total_capacity_kw:   float = 15       # 32 × 360W / 1000
     temp_coeff_pct_c:    float = -0.0035     # -0.35%/°C (mono, typical)
     noct_c:              float = 45.0        # Nominal Operating Cell Temp
     # Inverter (ideal values as specified)
