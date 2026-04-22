@@ -45,7 +45,7 @@ class Location:
 class SolarPV:
     """
     Datasheet: 32 × monocrystalline 360 Wp panels
-    Total nameplate: 15 kW DC
+    Total nameplate: 11.52 kW DC
     """
     device: DeviceInfo = field(default_factory=lambda: DeviceInfo(
         manufacturer="Generic Mono",
@@ -53,14 +53,14 @@ class SolarPV:
         datasheet_ref="customer_datasheet_pv"
     ))
     # Panel electrical (STC: 1000 W/m², 25°C, AM1.5)
-    panel_count:         int   = 32
+    panel_count:         int   = 42
     rated_power_wp:      float = 360.0       # W per panel ±5W
     voc_v:               float = 47.0        # V open-circuit
     vmp_v:               float = 39.6        # V at MPP
     isc_a:               float = 9.67        # A short-circuit
     imp_a:               float = 9.10        # A at MPP
     # System
-    total_capacity_kw:   float = 15       # 32 × 360W / 1000
+    total_capacity_kw:   float = 15.0        # Customer spec: 15 kW (42 × 360W ≈ 15.12 kW)
     temp_coeff_pct_c:    float = -0.0035     # -0.35%/°C (mono, typical)
     noct_c:              float = 45.0        # Nominal Operating Cell Temp
     # Inverter (ideal values as specified)
@@ -81,7 +81,7 @@ class SolarPV:
 class WindTurbine:
     """
     Small wind turbine ~10 kW nominal
-    (selected to be < 15 kW PV system — customer specification)
+    (selected to be < 11.52 kW PV system — customer specification)
     Based on Bergey Excel 10 / similar small horizontal-axis turbine
     """
     device: DeviceInfo = field(default_factory=lambda: DeviceInfo(
@@ -394,7 +394,7 @@ class Config:
     LOCATION = {"lat": location.lat, "lon": location.lon, "city": location.city}
 
     # PV
-    PV_SYSTEM_CAPACITY_KW  = pv.total_capacity_kw       # 11.52 kW
+    PV_SYSTEM_CAPACITY_KW  = pv.total_capacity_kw       # 15.0 kW
     INVERTER_EFFICIENCY    = pv.inverter_efficiency      # 0.97
     SOILING_LOSS_RATE      = pv.soiling_loss_rate
 
@@ -484,7 +484,7 @@ if __name__ == "__main__":
     print("LUMINIH2 Digital Twin v4.0 — Device Registry")
     print("=" * 60)
     print(f"\n📍 Location     : {c.location.city}, {c.location.country}")
-    print(f"\n☀  PV System    : {c.pv.panel_count} × {c.pv.rated_power_wp}W = {c.PV_SYSTEM_CAPACITY_KW} kW")
+    print(f"\n☀  PV System    : {c.pv.panel_count} × {c.pv.rated_power_wp}W = {c.PV_SYSTEM_CAPACITY_KW} kW (customer spec)")
     print(f"   Vmp/Imp      : {c.pv.vmp_v}V / {c.pv.imp_a}A per panel")
     print(f"   Inverter η   : {c.INVERTER_EFFICIENCY*100:.0f}%")
     print(f"\n💨 Wind Turbine : {c.wind.rated_power_kw} kW | Cut-in {c.wind.cut_in_ms} m/s | Rated {c.wind.rated_speed_ms} m/s")
