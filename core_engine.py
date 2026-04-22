@@ -207,10 +207,10 @@ class TickEngine:
             force_bess_charge: bool = False,
             ) -> TickState:
         """Execute one simulation tick. Returns TickState snapshot."""
-        import pytz
-        from datetime import datetime as dt
+        from datetime import datetime as dt, timezone, timedelta
         self.tick_count += 1
-        now = dt.now(pytz.timezone("Europe/Zagreb"))
+        zagreb_offset = timezone(timedelta(hours=2))
+        now = dt.now(zagreb_offset)
         dt_h = self.cfg.TIMESTEP_SEC / 3600.0
 
         # ── 1. Weather ─────────────────────────────────────────────────
