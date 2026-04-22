@@ -45,7 +45,7 @@ class Location:
 class SolarPV:
     """
     Datasheet: 32 × monocrystalline 360 Wp panels
-    Total nameplate: 11.52 kW DC
+    Total nameplate: 15 kW DC
     """
     device: DeviceInfo = field(default_factory=lambda: DeviceInfo(
         manufacturer="Generic Mono",
@@ -81,7 +81,7 @@ class SolarPV:
 class WindTurbine:
     """
     Small wind turbine ~10 kW nominal
-    (selected to be < 11.52 kW PV system — customer specification)
+    (selected to be < 15 kW PV system — customer specification)
     Based on Bergey Excel 10 / similar small horizontal-axis turbine
     """
     device: DeviceInfo = field(default_factory=lambda: DeviceInfo(
