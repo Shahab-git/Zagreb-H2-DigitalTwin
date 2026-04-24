@@ -1,6 +1,6 @@
 # =============================================================================
 # main.py — LUMINIH2 Digital Twin Dashboard v4.1
-# Dark Industrial Theme · Zagreb, Croatia · Full English
+# Light Professional Theme · Zagreb, Croatia · Full English
 # =============================================================================
 
 import streamlit as st
@@ -32,49 +32,49 @@ st.set_page_config(
 )
 
 # =============================================================================
-# DARK INDUSTRIAL CSS
+# WHITE PROFESSIONAL CSS
 # =============================================================================
 st.markdown("""
 <style>
-.stApp{background:#0d1117;color:#e6edf3}
+.stApp{background:#ffffff;color:#1f2328}
 .block-container{padding:.75rem 1.5rem 1rem}
-.lumi-header{background:#161b22;border:1px solid #30363d;border-left:4px solid #00d4ff;border-radius:8px;padding:14px 20px;margin-bottom:16px}
-.kpi{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px 16px;height:100%}
-.kpi-lbl{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin:0}
+.lumi-header{background:#f6f8fa;border:1px solid #d0d7de;border-left:4px solid #00d4ff;border-radius:8px;padding:14px 20px;margin-bottom:16px}
+.kpi{background:#ffffff;border:1px solid #d0d7de;border-radius:8px;padding:12px 16px;height:100%;box-shadow: 0 1px 3px rgba(0,0,0,0.05)}
+.kpi-lbl{font-size:11px;color:#636c76;text-transform:uppercase;letter-spacing:.06em;margin:0}
 .kpi-val{font-size:22px;font-weight:600;margin:3px 0 2px}
-.kpi-sub{font-size:11px;color:#8b949e;margin:0}
-.kpi-green{color:#3fb950}.kpi-amber{color:#d29922}.kpi-red{color:#f85149}
-.kpi-blue{color:#58a6ff}.kpi-cyan{color:#00d4ff}.kpi-purple{color:#bc8cff}
+.kpi-sub{font-size:11px;color:#636c76;margin:0}
+.kpi-green{color:#1a7f37}.kpi-amber{color:#9a6700}.kpi-red{color:#d1242f}
+.kpi-blue{color:#0969da}.kpi-cyan{color:#0599bc}.kpi-purple{color:#8250df}
 .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
-.badge-green{background:#0d2c18;color:#3fb950;border:1px solid #1a4d2e}
-.badge-amber{background:#2d1f00;color:#d29922;border:1px solid #5a3e00}
-.badge-red{background:#2d0e0e;color:#f85149;border:1px solid #5a1e1e}
-.badge-cyan{background:#001a22;color:#00d4ff;border:1px solid #004466}
-.badge-purple{background:#1a1040;color:#bc8cff;border:1px solid #3d2080}
-.switch-log{background:#0d1117;border:1px solid #30363d;border-left:3px solid #00d4ff;border-radius:6px;padding:8px 14px;font-family:'Courier New',monospace;font-size:12px;color:#79c0ff;min-height:36px;margin:8px 0}
-.sec-hdr{font-size:12px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.08em;margin:14px 0 8px;border-bottom:1px solid #21262d;padding-bottom:5px}
-.stTabs [data-baseweb="tab-list"]{background:#161b22;border-bottom:1px solid #30363d;gap:4px}
-.stTabs [data-baseweb="tab"]{background:#0d1117;color:#8b949e;border-radius:6px 6px 0 0;padding:7px 14px;border:1px solid #30363d;border-bottom:none;font-size:13px}
-.stTabs [aria-selected="true"]{background:#161b22 !important;color:#00d4ff !important;border-color:#00d4ff !important}
-section[data-testid="stSidebar"]{background:#0d1117;border-right:1px solid #30363d}
-.alert-error{background:#2d0e0e;border:1px solid #f85149;border-radius:6px;padding:8px 14px;color:#f85149;font-size:13px;margin:4px 0}
-.alert-warning{background:#2d1f00;border:1px solid #d29922;border-radius:6px;padding:8px 14px;color:#d29922;font-size:13px;margin:4px 0}
-.alert-info{background:#001a22;border:1px solid #00d4ff;border-radius:6px;padding:8px 14px;color:#00d4ff;font-size:13px;margin:4px 0}
-.health-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #21262d}
-.scenario-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px;margin:6px 0}
+.badge-green{background:#dafbe1;color:#1a7f37;border:1px solid #1a7f37}
+.badge-amber{background:#fff8c5;color:#9a6700;border:1px solid #9a6700}
+.badge-red{background:#ffebe9;color:#d1242f;border:1px solid #d1242f}
+.badge-cyan{background:#ddf4ff;color:#0969da;border:1px solid #0969da}
+.badge-purple{background:#f5f0ff;color:#8250df;border:1px solid #8250df}
+.switch-log{background:#f6f8fa;border:1px solid #d0d7de;border-left:3px solid #00d4ff;border-radius:6px;padding:8px 14px;font-family:'Courier New',monospace;font-size:12px;color:#0969da;min-height:36px;margin:8px 0}
+.sec-hdr{font-size:12px;font-weight:600;color:#636c76;text-transform:uppercase;letter-spacing:.08em;margin:14px 0 8px;border-bottom:1px solid #d0d7de;padding-bottom:5px}
+.stTabs [data-baseweb="tab-list"]{background:#f6f8fa;border-bottom:1px solid #d0d7de;gap:4px}
+.stTabs [data-baseweb="tab"]{background:#ffffff;color:#636c76;border-radius:6px 6px 0 0;padding:7px 14px;border:1px solid #d0d7de;border-bottom:none;font-size:13px}
+.stTabs [aria-selected="true"]{background:#ffffff !important;color:#00d4ff !important;border-color:#00d4ff !important}
+section[data-testid="stSidebar"]{background:#f6f8fa;border-right:1px solid #d0d7de}
+.alert-error{background:#ffebe9;border:1px solid #d1242f;border-radius:6px;padding:8px 14px;color:#d1242f;font-size:13px;margin:4px 0}
+.alert-warning{background:#fff8c5;border:1px solid #9a6700;border-radius:6px;padding:8px 14px;color:#9a6700;font-size:13px;margin:4px 0}
+.alert-info{background:#ddf4ff;border:1px solid #0969da;border-radius:6px;padding:8px 14px;color:#0969da;font-size:13px;margin:4px 0}
+.health-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #d0d7de}
+.scenario-card{background:#f6f8fa;border:1px solid #d0d7de;border-radius:8px;padding:14px;margin:6px 0}
 </style>
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# PLOTLY DARK TEMPLATE
+# PLOTLY LIGHT TEMPLATE
 # =============================================================================
-DARK = dict(template="plotly_dark", paper_bgcolor="#161b22", plot_bgcolor="#0d1117",
-            font_color="#e6edf3", margin=dict(t=28, b=28, l=44, r=16))
-C = dict(solar="#FFB347", wind="#58a6ff", bess="#3fb950", elec="#bc8cff",
-         h2="#00d4ff", fc="#ff7b72", grid="#8b949e", ev="#79c0ff",
-         co2="#3fb950", water="#58a6ff", o2="#d29922")
+LIGHT = dict(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+             font_color="#1f2328", margin=dict(t=28, b=28, l=44, r=16))
+C = dict(solar="#FFB347", wind="#0969da", bess="#1a7f37", elec="#8250df",
+         h2="#0599bc", fc="#cf222e", grid="#636c76", ev="#218bff",
+         co2="#1a7f37", water="#0969da", o2="#9a6700")
 
-def mk(**kw): return {**DARK, **kw}
+def mk(**kw): return {**LIGHT, **kw}
 
 # =============================================================================
 # STARTUP
@@ -85,7 +85,7 @@ except AssertionError as e:
     st.error(f"Config error: {e}"); st.stop()
 
 # =============================================================================
-# SESSION STATE
+# SESSION STATE (Remains unchanged)
 # =============================================================================
 def _init():
     if "lumi_v41" in st.session_state:
