@@ -36,7 +36,7 @@ st.set_page_config(
 # =============================================================================
 st.markdown("""
 <style>
-.stApp{background:#0d1117;color:#e6edf3}
+.stApp{background:#ffffff;color:#000000}
 .block-container{padding:.75rem 1.5rem 1rem}
 .lumi-header{background:#161b22;border:1px solid #30363d;border-left:4px solid #00d4ff;border-radius:8px;padding:14px 20px;margin-bottom:16px}
 .kpi{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px 16px;height:100%}
@@ -68,7 +68,7 @@ section[data-testid="stSidebar"]{background:#0d1117;border-right:1px solid #3036
 # =============================================================================
 # PLOTLY DARK TEMPLATE
 # =============================================================================
-DARK = dict(template="plotly_dark", paper_bgcolor="#161b22", plot_bgcolor="#0d1117",
+white = dict(template="plotly_white", paper_bgcolor="#161b22", plot_bgcolor="#0d1117",
             font_color="#e6edf3", margin=dict(t=28, b=28, l=44, r=16))
 C = dict(solar="#FFB347", wind="#58a6ff", bess="#3fb950", elec="#bc8cff",
          h2="#00d4ff", fc="#ff7b72", grid="#8b949e", ev="#79c0ff",
