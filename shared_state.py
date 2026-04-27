@@ -44,8 +44,16 @@ def mk(**kw):
 CSS = """
 <style>
 /* ── Base: White / Light Industrial ── */
-.stApp{background:#ffffff !important;color:#0f172a}
-.block-container{background:#ffffff;padding:.6rem 1.5rem 1rem}
+.stApp{background:#ffffff !important;color:#0f172a !important}
+.stApp > div{background:#ffffff !important}
+[data-testid="stAppViewContainer"]{background:#ffffff !important}
+[data-testid="stHeader"]{background:#ffffff !important}
+[data-testid="stToolbar"]{background:#ffffff !important}
+.main{background:#ffffff !important}
+.main .block-container{background:#ffffff !important;padding:.6rem 1.5rem 1rem}
+[data-testid="stSidebarContent"]{background:#f8fafc !important}
+.css-1d391kg{background:#ffffff !important}
+.css-12oz5g7{background:#ffffff !important}
 
 /* Header */
 .page-header{background:#ffffff;border:1px solid #e2e8f0;
