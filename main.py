@@ -20,6 +20,8 @@ from core_engine import TickEngine, LCOHAccumulator, AlertSystem, HistoryBuffer
 from scenario_engine import ScenarioEngine, ScenarioParams
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
+from shared_state import inject_voice_welcome
+inject_voice_welcome()
 
 # =============================================================================
 # PAGE CONFIG
