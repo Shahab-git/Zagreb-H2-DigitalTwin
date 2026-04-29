@@ -388,80 +388,74 @@ with tabs[1]:
                               {"range": [90, 100], "color": "#0d2c18"}],
                    "threshold": {"line": {"color": C["fc"], "width": 2}, "value": 80}}))
         f6.update_layout(**mk(height=200))
- with c2:
-        if hd("h2_kg_h"):
-            
-            st.markdown('<p class="sec-hdr">H₂ production rate</p>', unsafe_allow_html=True)
-            f7 = go.Figure()
-            f7.add_trace(go.Bar(x=hist["time"], y=(hist["h2_kg_h"]*1000).round(2),
-                marker_color=C["h2"], marker_line_width=0, name="g/h"))
-            f7.update_layout(**mk(height=200, yaxis_title="g H₂/h"))
-            st.plotly_chart(f7, use_container_width=True)
-
-        if hd("elec_eff_pct") and len(hist) > 5:
-            st.markdown('<p class="sec-hdr">Efficiency vs load</p>', unsafe_allow_html=True)
-            f8 = px.scatter(hist, x="elec_kw", y="elec_eff_pct", color="h2_kg_h",
-                color_continuous_scale=[[0, "#161b22"], [1, C["h2"]]],
-                labels={"elec_kw": "Power (kW)", "elec_eff_pct": "η (%)"})
-            f8.update_layout(**mk(height=180))
-            st.plotly_chart(f8, use_container_width=True)
-        ec = st.columns(3)
-   # ─── TAB 3: STORAGE ────────────────────────────────────────────────────────
-   with tabs[2]:
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown('<p class="sec-hdr">BESS state of charge</p>', unsafe_allow_html=True)
-        f9 = go.Figure(go.Indicator(
-            mode="gauge+number+delta", value=s.bess_soc_pct,
-            delta={"reference": 55.0, "valueformat": ".1f"},
-            title={"text": "SoC (%)"},
-            gauge={"axis": {"range": [0, 100], "tickcolor": "#8b949e"},
-                   "bar": {"color": C["bess"]}, "bgcolor": "#161b22",
-                   "steps": [
-                       {"range": [0, Config.BATT_SOC_MIN*100], "color": "#2d0e0e"},
-                       {"range": [Config.BATT_SOC_MIN*100, Config.BATT_SOC_MAX*100], "color": "#0d2c18"}],
-                   "threshold": {"line": {"color": C["fc"], "width": 2},
-                                 "value": Config.BATT_SOC_MIN*100}}))
-        f9.update_layout(**mk(height=230))
-        st.plotly_chart(f9, use_container_width=True)
-
-        if hd("bess_temp_c"):
-            st.markdown('<p class="sec-hdr">BESS temperature</p>', unsafe_allow_html=True)
-            f10 = go.Figure()
-            f10.add_trace(go.Scatter(x=hist["time"], y=hist["bess_temp_c"],
-                line=dict(color=C["fc"], width=2), name="°C"))
-            f10.add_hline(y=55, line_dash="dash", line_color=C["solar"],
-                          annotation_text="⚠ 55°C")
-            f10.add_hline(y=Config.THERMAL_RUNAWAY_TEMP, line_dash="dash",
-                          line_color=C["fc"], annotation_text="🔥 Runaway")
-            f10.update_layout(**mk(height=170, yaxis_title="°C"))
-            st.plotly_chart(f10, use_container_width=True)
-
-    with c2:
-        st.markdown('<p class="sec-hdr">Hydrogen tank levels</p>', unsafe_allow_html=True)
-        f11 = go.Figure(go.Bar(
-            x=["Buffer", "Main Tank\n(TH540-50)", "HRS Station"],
-            y=[s.buffer_pct, s.main_tank_pct, s.hrs_pct],
-            marker_color=[C["h2"], C["elec"], C["bess"]], marker_line_width=0,
-            text=[f"{v:.1f}%" for v in [s.buffer_pct, s.main_tank_pct, s.hrs_pct]],
-            textposition="outside"))
-        f11.update_layout(**mk(height=230,yaxis_range=[0,115],yaxis_title="%"))
-        st.plotly_chart(f11,use_container_width=True)
-
-        f12=go.Figure(go.Indicator(mode="gauge+number",value=s.pressure_bar,
-            title={"text":"Pressure (bar)"},
-            gauge={"axis":{"range":[0,Config.SAFETY_MAX_PRESSURE_BAR],"tickcolor":"#8b949e"},
-                   "bar":{"color":C["wind"]},"bgcolor":"#161b22",
-                   "threshold":{"line":{"color":C["fc"],"width":2},
-                                "value":Config.SAFETY_MAX_PRESSURE_BAR*.90}}))
-        f12.update_layout(**mk(height=170))
-        st.plotly_chart(f12, use_container_width=True)
-
-        comp_cls = "badge-green" if s.compressor_on else "badge-amber"
-        st.markdown(
-            f'Compressor HCS-100: <span class="badge {comp_cls}">'
-            f'{"● ON" if s.compressor_on else "○ STANDBY"}</span>'
-            f' | Tank {s.tank_temp_c:.1f}°C', unsafe_allow_html=True)
+        with c2:
+            if hd("h2_kg_h"):
+                st.markdown('<p class="sec-hdr">H₂ production rate</p>', unsafe_allow_html=True)
+                f7 = go.Figure()
+                f7.add_trace(go.Bar(x=hist["time"], y=(hist["h2_kg_h"]*1000).round(2),
+                                    marker_color=C["h2"], marker_line_width=0, name="g/h"))
+                f7.update_layout(**mk(height=200, yaxis_title="g H₂/h"))
+                st.plotly_chart(f7, use_container_width=True)
+                if hd("elec_eff_pct") and len(hist) > 5:
+                    st.markdown('<p class="sec-hdr">Efficiency vs load</p>', unsafe_allow_html=True)
+                    f8 = px.scatter(hist, x="elec_kw", y="elec_eff_pct", color="h2_kg_h",
+                                    color_continuous_scale=[[0, "#161b22"], [1, C["h2"]]],
+                                    labels={"elec_kw": "Power (kW)", "elec_eff_pct": "η (%)"})
+                    f8.update_layout(**mk(height=180))
+                    st.plotly_chart(f8, use_container_width=True)
+                    ec = st.columns(3)
+# ─── TAB 3: STORAGE ────────────────────────────────────────────────────────
+    with tabs[2]:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown('<p class="sec-hdr">BESS state of charge</p>', unsafe_allow_html=True)
+            f9 = go.Figure(go.Indicator(
+                mode="gauge+number+delta", value=s.bess_soc_pct,
+                delta={"reference": 55.0, "valueformat": ".1f"},
+                title={"text": "SoC (%)"},
+                gauge={"axis": {"range": [0, 100], "tickcolor": "#8b949e"},
+                       "bar": {"color": C["bess"]}, "bgcolor": "#161b22",
+                       "steps": [
+                           {"range": [0, Config.BATT_SOC_MIN*100], "color": "#2d0e0e"},
+                           {"range": [Config.BATT_SOC_MIN*100, Config.BATT_SOC_MAX*100], "color": "#0d2c18"}],
+                       "threshold": {"line": {"color": C["fc"], "width": 2},
+                                     "value": Config.BATT_SOC_MIN*100}}))
+            f9.update_layout(**mk(height=230))
+            st.plotly_chart(f9, use_container_width=True)
+            if hd("bess_temp_c"):
+                st.markdown('<p class="sec-hdr">BESS temperature</p>', unsafe_allow_html=True)
+                f10 = go.Figure()
+                f10.add_trace(go.Scatter(x=hist["time"], y=hist["bess_temp_c"],
+                                         line=dict(color=C["fc"], width=2), name="°C"))
+                f10.add_hline(y=55, line_dash="dash", line_color=C["solar"],
+                              annotation_text="⚠ 55°C")
+                f10.add_hline(y=Config.THERMAL_RUNAWAY_TEMP, line_dash="dash",
+                              line_color=C["fc"], annotation_text="🔥 Runaway")
+                f10.update_layout(**mk(height=170, yaxis_title="°C"))
+                st.plotly_chart(f10, use_container_width=True)
+                with c2:
+                    st.markdown('<p class="sec-hdr">Hydrogen tank levels</p>', unsafe_allow_html=True)
+                    f11 = go.Figure(go.Bar(
+                        x=["Buffer", "Main Tank\n(TH540-50)", "HRS Station"],
+                        y=[s.buffer_pct, s.main_tank_pct, s.hrs_pct],
+                        marker_color=[C["h2"], C["elec"], C["bess"]], marker_line_width=0,
+                        text=[f"{v:.1f}%" for v in [s.buffer_pct, s.main_tank_pct, s.hrs_pct]],
+                        textposition="outside"))
+                    f11.update_layout(**mk(height=230,yaxis_range=[0,115],yaxis_title="%"))
+                    st.plotly_chart(f11,use_container_width=True)
+                    f12=go.Figure(go.Indicator(mode="gauge+number",value=s.pressure_bar,
+                                               title={"text":"Pressure (bar)"},
+                                               gauge={"axis":{"range":[0,Config.SAFETY_MAX_PRESSURE_BAR],"tickcolor":"#8b949e"},
+                                                      "bar":{"color":C["wind"]},"bgcolor":"#161b22",
+                                                      "threshold":{"line":{"color":C["fc"],"width":2},
+                                                                   "value":Config.SAFETY_MAX_PRESSURE_BAR*.90}}))
+                    f12.update_layout(**mk(height=170))
+                    st.plotly_chart(f12, use_container_width=True)
+                    comp_cls = "badge-green" if s.compressor_on else "badge-amber"
+                    st.markdown(
+                        f'Compressor HCS-100: <span class="badge {comp_cls}">'
+                        f'{"● ON" if s.compressor_on else "○ STANDBY"}</span>'
+                        f' | Tank {s.tank_temp_c:.1f}°C', unsafe_allow_html=True)
       # ─── TAB 4: DISTRIBUTION ───────────────────────────────────────────────────
       with tabs[3]:
         c1, c2 = st.columns(2)
