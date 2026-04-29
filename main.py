@@ -19,8 +19,6 @@ from core_engine import TickEngine, LCOHAccumulator, AlertSystem, HistoryBuffer
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
 from scenario_engine import ScenarioEngine, ScenarioParams
-from shared_state import inject_voice_welcome
-inject_voice_welcome()
 
 # =============================================================================
 # PAGE CONFIG — must be first Streamlit call
