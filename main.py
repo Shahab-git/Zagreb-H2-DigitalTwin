@@ -93,34 +93,34 @@ except AssertionError as e:
 # SESSION STATE
 # =============================================================================
 def _init():
-    
     if "lumi_v41" in st.session_state:
         return
-    st.session_state.lumi_v41     = True
-    st.session_state.solar        = SolarSystem()
-    st.session_state.wind         = WindSystem()
-    st.session_state.bess         = BatteryBESS(0.55)
-def _init():
-    st.session_state.lcoh_acc     = LCOHAccumulator()
-    st.session_state.alerts       = AlertSystem()
-    st.session_state.history      = HistoryBuffer(maxlen=120)
-    st.session_state.subsystems   = SubsystemManager()
-    st.session_state.optimizer    = EconomicOptimizer(Config)
-    st.session_state.scenario_eng = ScenarioEngine(Config)
-    st.session_state.engine       = TickEngine(
-        Config,
-        st.session_state.solar, st.session_state.wind,
-        st.session_state.bess, st.session_state.electrolyzer,
-        st.session_state.h2_chain, st.session_state.fuel_cell,
-        st.session_state.ems, st.session_state.forecaster,
-def _init():
-    st.session_state.sim_running  = True
-    st.session_state.last_state   = None
-    st.session_state.last_fc      = None
-    st.session_state.annual_report = None
-    st.session_state.opt_result    = None
-    st.session_state.sub_result    = None
-_init()
+        st.session_state.lumi_v41     = True
+        st.session_state.solar        = SolarSystem()
+        st.session_state.wind         = WindSystem()
+        st.session_state.bess         = BatteryBESS(0.55)
+        def _init():
+            st.session_state.lcoh_acc     = LCOHAccumulator()
+            st.session_state.alerts       = AlertSystem()
+            st.session_state.history      = HistoryBuffer(maxlen=120)
+            st.session_state.subsystems   = SubsystemManager()
+            st.session_state.optimizer    = EconomicOptimizer(Config)
+            st.session_state.scenario_eng = ScenarioEngine(Config)
+            st.session_state.engine       = TickEngine(
+                Config,
+                st.session_state.solar, st.session_state.wind,
+                st.session_state.bess, st.session_state.electrolyzer,
+                st.session_state.h2_chain, st.session_state.fuel_cell,
+                st.session_state.ems, st.session_state.forecaster,
+            )
+                def _init():
+                    st.session_state.sim_running  = True
+                    st.session_state.last_state   = None
+                    st.session_state.last_fc      = None
+                    st.session_state.annual_report = None
+                    st.session_state.opt_result    = None
+                    st.session_state.sub_result    = None
+                    _init()
 
 # =============================================================================
 # SIDEBAR
