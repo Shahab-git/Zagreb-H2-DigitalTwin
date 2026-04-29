@@ -113,14 +113,14 @@ def _init():
                 st.session_state.h2_chain, st.session_state.fuel_cell,
                 st.session_state.ems, st.session_state.forecaster,
             )
-                def _init():
-                    st.session_state.sim_running  = True
-                    st.session_state.last_state   = None
-                    st.session_state.last_fc      = None
-                    st.session_state.annual_report = None
-                    st.session_state.opt_result    = None
-                    st.session_state.sub_result    = None
-                    _init()
+            def _init():
+                st.session_state.sim_running  = True
+                st.session_state.last_state   = None
+                st.session_state.last_fc      = None
+                st.session_state.annual_report = None
+                st.session_state.opt_result    = None
+                st.session_state.sub_result    = None
+                _init()
 
 # =============================================================================
 # SIDEBAR
