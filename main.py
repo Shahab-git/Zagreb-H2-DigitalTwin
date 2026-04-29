@@ -456,84 +456,79 @@ with tabs[1]:
                         f'Compressor HCS-100: <span class="badge {comp_cls}">'
                         f'{"● ON" if s.compressor_on else "○ STANDBY"}</span>'
                         f' | Tank {s.tank_temp_c:.1f}°C', unsafe_allow_html=True)
-      # ─── TAB 4: DISTRIBUTION ───────────────────────────────────────────────────
-      with tabs[3]:
-        c1, c2 = st.columns(2)
-        with c1:
-        st.markdown('<p class="sec-hdr">HRS 5 kg station</p>', unsafe_allow_html=True)
-        st.progress(min(s.hrs_pct / 100, 1.0))
-        hrs_c = "badge-green" if s.hrs_pct > 60 else "badge-amber"
-        st.markdown(
-            f'{s.hrs_pct:.1f}% · '
-            f'<span class="badge {hrs_c}">{"● READY" if s.hrs_pct > 60 else "▼ FILLING"}</span>',
-            unsafe_allow_html=True)
-
-        f14 = go.Figure(go.Indicator(
-            mode="gauge+number", value=s.fc_kw,
-            title={"text": f"AIRCELL 3000 Output (kW) · η={s.fc_eff_pct:.1f}%"},
-            gauge={"axis": {"range": [0, Config.FC_POWER_NOM_KW*1.1],
-                            "tickcolor": "#8b949e"},
-                   "bar": {"color": C["bess"]}, "bgcolor": "#161b22"}))
-        f14.update_layout(**mk(height=220))
-        st.plotly_chart(f14, use_container_width=True)
-    with c2:
-        if hd("grid_export_kw"):
-          st.markdown('<p class="sec-hdr">Grid export vs EV load</p>', unsafe_allow_html=True)
-          f15 = go.Figure()
-          f15.add_trace(go.Scatter(x=hist["time"], y=hist["grid_export_kw"],
-                                   fill="tozeroy", fillcolor="rgba(139,148,158,.2)",
-                                   line=dict(color=C["grid"], width=2), name="Grid export"))
-          f15.add_trace(go.Scatter(x=hist["time"], y=hist["ev_kw"],
-                                   fill="tozeroy", fillcolor="rgba(121,192,255,.2)",
-                                   line=dict(color=C["ev"], width=2), name="EV load"))
-          f15.update_layout(**mk(height=210, yaxis_title="kW"))
-          st.plotly_chart(f15, use_container_width=True)
-          f16 = go.Figure(go.Pie(
-            values=[max(.01, s.ev_kw), max(.01, s.grid_export_kw), max(.01, s.heat_kw)],
-            labels=["EV Charging", "Grid Export", "Heat Recovery"],
-            hole=0.55, marker=dict(colors=[C["ev"], C["grid"], C["solar"]],
-                                   line=dict(color="#0d1117", width=2))))
-          f16.update_layout(**mk(height=210, legend=dict(orientation="h", y=-0.15, font_size=11)))
-          st.plotly_chart(f16, use_container_width=True)
-          # ─── TAB 5: SUBSYSTEMS ─────────────────────────────────────────────────────
+# ─── TAB 4: DISTRIBUTION ───────────────────────────────────────────────────
+        with tabs[3]:
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown('<p class="sec-hdr">HRS 5 kg station</p>', unsafe_allow_html=True)
+                st.progress(min(s.hrs_pct / 100, 1.0))
+                hrs_c = "badge-green" if s.hrs_pct > 60 else "badge-amber"
+                st.markdown(
+                    f'{s.hrs_pct:.1f}% · '
+                    f'<span class="badge {hrs_c}">{"● READY" if s.hrs_pct > 60 else "▼ FILLING"}</span>',
+                    unsafe_allow_html=True)
+                f14 = go.Figure(go.Indicator(
+                    mode="gauge+number", value=s.fc_kw,
+                    title={"text": f"AIRCELL 3000 Output (kW) · η={s.fc_eff_pct:.1f}%"},
+                    gauge={"axis": {"range": [0, Config.FC_POWER_NOM_KW*1.1],
+                                    "tickcolor": "#8b949e"},
+                           "bar": {"color": C["bess"]}, "bgcolor": "#161b22"}))
+                f14.update_layout(**mk(height=220))
+                st.plotly_chart(f14, use_container_width=True)
+                with c2:
+                    if hd("grid_export_kw"):
+                        st.markdown('<p class="sec-hdr">Grid export vs EV load</p>', unsafe_allow_html=True)
+                        f15 = go.Figure()
+                        f15.add_trace(go.Scatter(x=hist["time"], y=hist["grid_export_kw"],
+                                                 fill="tozeroy", fillcolor="rgba(139,148,158,.2)",
+                                                 line=dict(color=C["grid"], width=2), name="Grid export"))
+                        f15.add_trace(go.Scatter(x=hist["time"], y=hist["ev_kw"],
+                                                 fill="tozeroy", fillcolor="rgba(121,192,255,.2)",
+                                                 line=dict(color=C["ev"], width=2), name="EV load"))
+                        f15.update_layout(**mk(height=210, yaxis_title="kW"))
+                        st.plotly_chart(f15, use_container_width=True)
+                        f16 = go.Figure(go.Pie(
+                            values=[max(.01, s.ev_kw), max(.01, s.grid_export_kw), max(.01, s.heat_kw)],
+                            labels=["EV Charging", "Grid Export", "Heat Recovery"],
+                            hole=0.55, marker=dict(colors=[C["ev"], C["grid"], C["solar"]],
+                                                   line=dict(color="#0d1117", width=2))))
+                        f16.update_layout(**mk(height=210, legend=dict(orientation="h", y=-0.15, font_size=11)))
+                        st.plotly_chart(f16, use_container_width=True)
+# ─── TAB 5: SUBSYSTEMS ─────────────────────────────────────────────────────
 with tabs[4]: 
 if sub is None:
-        st.info("Subsystem data not yet available.")
-    else:
-        wr = sub["water"]
-        o2 = sub["oxygen"]
-        dr = sub["dryer"]
-        wu = sub["warmup"]
-
-        c1, c2 = st.columns(2)
-
-        with c1:
-            st.markdown('<p class="sec-hdr">Water treatment (DIN ISO 3696 Type 1)</p>',
-                        unsafe_allow_html=True)
-            wc = st.columns(2)
-            wq_cls = "kpi-green" if wr.quality_ok else "kpi-red"
-            kpi(wc[0], "Conductivity",
-                f"{wr.conductivity_us_cm:.4f} µS/cm",
-                "Target < 0.1 µS/cm", wq_cls)
-            kpi(wc[1], "Resistance",
-                f"{wr.resistance_mohm_cm:.1f} MΩ·cm",
-                "Target > 10 MΩ·cm",
-                "kpi-green" if wr.resistance_mohm_cm >= 10 else "kpi-red")
-            st.progress(min(wr.resin_saturation_pct / 100, 1.0))
-            resin_cls = "badge-red" if wr.resin_warning else "badge-green"
-            st.markdown(
-                f'Resin saturation: {wr.resin_saturation_pct:.1f}% '
-                f'<span class="badge {resin_cls}">'
-                f'{"⚠ REPLACE SOON" if wr.resin_warning else "● OK"}</span>',
-                unsafe_allow_html=True)
-
-            st.markdown('<p class="sec-hdr">O₂ management</p>', unsafe_allow_html=True)
-            oc = st.columns(3)
-            kpi(oc[0], "O₂ Flow",   f"{o2.o2_flow_nm3_h:.4f}",  "Nm³/h", "kpi-amber")
-            kpi(oc[1], "O₂ Pressure", f"{o2.o2_pressure_bar:.3f}", "bar (max 0.5)",
-                "kpi-green" if o2.safety_ok else "kpi-red")
-            kpi(oc[2], "Vented",    f"{o2.vented_nm3_h:.4f}",   "Nm³/h to atm", "kpi-blue")
-
+    st.info("Subsystem data not yet available.")
+else:
+    wr = sub["water"]
+    o2 = sub["oxygen"]
+    dr = sub["dryer"]
+    wu = sub["warmup"]
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown('<p class="sec-hdr">Water treatment (DIN ISO 3696 Type 1)</p>',
+                    unsafe_allow_html=True)
+        wc = st.columns(2)
+        wq_cls = "kpi-green" if wr.quality_ok else "kpi-red"
+        kpi(wc[0], "Conductivity",
+            f"{wr.conductivity_us_cm:.4f} µS/cm",
+            "Target < 0.1 µS/cm", wq_cls)
+        kpi(wc[1], "Resistance",
+            f"{wr.resistance_mohm_cm:.1f} MΩ·cm",
+            "Target > 10 MΩ·cm",
+            "kpi-green" if wr.resistance_mohm_cm >= 10 else "kpi-red")
+        st.progress(min(wr.resin_saturation_pct / 100, 1.0))
+        resin_cls = "badge-red" if wr.resin_warning else "badge-green"
+        st.markdown(
+            f'Resin saturation: {wr.resin_saturation_pct:.1f}% '
+            f'<span class="badge {resin_cls}">'
+            f'{"⚠ REPLACE SOON" if wr.resin_warning else "● OK"}</span>',
+            unsafe_allow_html=True)
+        st.markdown('<p class="sec-hdr">O₂ management</p>', unsafe_allow_html=True)
+        oc = st.columns(3)
+        kpi(oc[0], "O₂ Flow",   f"{o2.o2_flow_nm3_h:.4f}",  "Nm³/h", "kpi-amber")
+        kpi(oc[1], "O₂ Pressure", f"{o2.o2_pressure_bar:.3f}", "bar (max 0.5)",
+            "kpi-green" if o2.safety_ok else "kpi-red")
+        kpi(oc[2], "Vented",    f"{o2.vented_nm3_h:.4f}",   "Nm³/h to atm", "kpi-blue")
         with c2:
             st.markdown('<p class="sec-hdr">H₂ dryer (target < 5 ppm moisture)</p>',
                         unsafe_allow_html=True)
