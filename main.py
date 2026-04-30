@@ -97,52 +97,55 @@ except AssertionError as e:
 # SESSION STATE
 # =============================================================================
 def _init():
+    # ۱. جلوگیری از اجرای مجدد
     if "lumi_v41" in st.session_state:
         return
-
     st.session_state.lumi_v41 = True
 
-    # 1. دارایی‌های فیزیکی که فایلشان موجود است
-    st.session_state.solar = SolarSystem()
-    st.session_state.wind = WindSystem()
-    st.session_state.bess = BatteryBESS(0.55)
-
-    # 2. حذف ایمپورت‌ها و جایگزینی با مقدار تهی
-    # به جای کلاس‌های واقعی، فعلاً None می‌گذاریم
-    st.session_state.ems = None  
-    st.session_state.forecaster = None  
-
-    # 3. سایر سیستم‌ها (اگر این فایل‌ها ارور می‌دهند، باید آن‌ها را هم بررسی کنی)
-    st.session_state.lcoh_acc = LCOHAccumulator()
-    st.session_state.alerts = AlertSystem()
-    st.session_state.history = HistoryBuffer(maxlen=120)
-    st.session_state.subsystems = SubsystemManager()
-    st.session_state.optimizer = EconomicOptimizer(Config)
-    st.session_state.scenario_eng = ScenarioEngine(Config)
-
-    # 4. مقداردهی موتور با ورودی‌های موجود
-    # در اینجا ۶ ورودی می‌فرستیم، اگر TickEngine ارور داد، 
-    # باید تعداد ورودی‌های آن را در core_engine.py چک کنی.
-    st.session_state.engine = TickEngine(
-        Config,
-        st.session_state.solar,
-        st.session_state.wind,
-        st.session_state.bess,
-        st.session_state.ems,
-        st.session_state.forecaster,
-    )
-
-    # 5. وضعیت‌های زمان اجرا
-    st.session_state.sim_running = True
+    # ۲. مقداردهی اولیه متغیرهای وضعیت (این بخش باید قبل از هر ارور احتمالی باشد)
+    st.session_state.sim_running = False  # مقدار پیش‌فرض
     st.session_state.last_state = None
     st.session_state.last_fc = None
     st.session_state.annual_report = None
     st.session_state.opt_result = None
     st.session_state.sub_result = None
+    st.session_state.history = HistoryBuffer(maxlen=120)
+    st.session_state.alerts = AlertSystem()
 
-# اجرا
+    # ۳. مقداردهی دارایی‌ها (فقط مواردی که فایلشان موجود است)
+    try:
+        st.session_state.solar = SolarSystem()
+        st.session_state.wind = WindSystem()
+        st.session_state.bess = BatteryBESS(0.55)
+        
+        # مقداردهی مواردی که پاک کردیم به عنوان None
+        st.session_state.ems = None
+        st.session_state.forecaster = None
+        
+        # سایر تحلیل‌گرها
+        st.session_state.lcoh_acc = LCOHAccumulator()
+        st.session_state.subsystems = SubsystemManager()
+        st.session_state.optimizer = EconomicOptimizer(Config)
+        st.session_state.scenario_eng = ScenarioEngine(Config)
+
+        # ۴. تلاش برای ساخت موتور
+        st.session_state.engine = TickEngine(
+            Config,
+            st.session_state.solar,
+            st.session_state.wind,
+            st.session_state.bess,
+            st.session_state.ems,
+            st.session_state.forecaster,
+        )
+        # اگر تا اینجا بدون ارور آمد، شبیه‌سازی می‌تواند شروع شود
+        st.session_state.sim_running = True
+
+    except Exception as e:
+        st.error(f"Error during engine initialization: {e}")
+        st.session_state.engine = None
+
+# اجرای تابع
 _init()
-# =========
 # =============================================================================
 # SIDEBAR
 # =============================================================================
