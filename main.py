@@ -12,13 +12,14 @@ import numpy as np
 
 # وارد کردن ماژول‌های پروژه (مطمئن شوید این فایل‌ها در مسیر پروژه هستند)
 from config import Config, validate_config
-from energy_assets import SolarSystem, WindSystem, BatteryBESS
+from energy_assets import SolarSystem, WindSystem, BatteryBESS, Electrolyzer, HydrogenChain, FuelCell
 from ai_forecaster import AIPredictor
 from weather_api import WeatherProvider
-from core_engine import TickEngine, LCOHAccumulator, AlertSystem, HistoryBuffer
+from core_engine import TickEngine, LCOHAccumulator, AlertSystem, HistoryBuffer, EMS
 from scenario_engine import ScenarioEngine, ScenarioParams
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
+
 
 # =============================================================================
 # PAGE CONFIG
@@ -107,9 +108,7 @@ def _init():
 
     # --- اضافه کردن موارد گمشده که باعث ارور شده بودند ---
     # این کلاس‌ها باید در فایل‌های پروژه شما (مثل energy_assets.py یا subsystems.py) تعریف شده باشند
-    from energy_assets import Electrolyzer, HydrogenChain, FuelCell
-    from ai_forecaster import AIPredictor
-    from core_engine import EMS
+    
 
     st.session_state.electrolyzer = Electrolyzer()  # تعریف الکترولایزر
     st.session_state.h2_chain = HydrogenChain()  # تعریف زنجیره هیدروژن (تانک‌ها و ...)
