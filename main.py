@@ -823,16 +823,6 @@ with tabs[7]:
                             f'<br><span class="badge {ld_c}" style="font-size:13px;padding:6px 14px;">'
                             f'{"⚠ H₂ LEAK DETECTED" if s.leak_detected else "✅ No leak detected"}'
                             f'</span>', unsafe_allow_html=True)
-# =============================================================================
-# AUTO-REFRESH
-# =============================================================================
-try:
-    from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=refresh * 1000, key="lumi_v41_r")
-    except ImportError:
-    import time;
-    time.sleep(refresh);
-    st.rerun()
 
 
 
