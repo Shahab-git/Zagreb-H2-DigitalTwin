@@ -12,7 +12,7 @@ import numpy as np
 
 # وارد کردن ماژول‌های پروژه (مطمئن شوید این فایل‌ها در مسیر پروژه هستند)
 from config import Config, validate_config
-from energy_assets import SolarSystem, WindSystem, BatteryBESS, Electrolyzer, HydrogenChain, FuelCell
+from energy_assets import SolarSystem, WindSystem, BatteryBESS
 from ai_forecaster import AIPredictor
 from weather_api import WeatherProvider
 from core_engine import TickEngine, LCOHAccumulator, AlertSystem, HistoryBuffer, EMS
