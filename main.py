@@ -105,6 +105,18 @@ def _init():
     st.session_state.wind = WindSystem()
     st.session_state.bess = BatteryBESS(0.55)
 
+    # --- اضافه کردن موارد گمشده که باعث ارور شده بودند ---
+    # این کلاس‌ها باید در فایل‌های پروژه شما (مثل energy_assets.py یا subsystems.py) تعریف شده باشند
+    from energy_assets import Electrolyzer, HydrogenChain, FuelCell
+    from ai_forecaster import AIPredictor
+    from core_engine import EMS
+
+    st.session_state.electrolyzer = Electrolyzer()  # تعریف الکترولایزر
+    st.session_state.h2_chain = HydrogenChain()  # تعریف زنجیره هیدروژن (تانک‌ها و ...)
+    st.session_state.fuel_cell = FuelCell()  # تعریف پیل سوختی
+    st.session_state.ems = EMS()  # تعریف سیستم مدیریت انرژی
+    st.session_state.forecaster = AIPredictor()  # تعریف پیش‌بین AI
+
     # Systems
     st.session_state.lcoh_acc = LCOHAccumulator()
     st.session_state.alerts = AlertSystem()
@@ -112,12 +124,17 @@ def _init():
     st.session_state.subsystems = SubsystemManager()
     st.session_state.optimizer = EconomicOptimizer(Config)
     st.session_state.scenario_eng = ScenarioEngine(Config)
+
     st.session_state.engine = TickEngine(
         Config,
-        st.session_state.solar, st.session_state.wind,
-        st.session_state.bess, st.session_state.electrolyzer,
-        st.session_state.h2_chain, st.session_state.fuel_cell,
-        st.session_state.ems, st.session_state.forecaster,
+        st.session_state.solar,
+        st.session_state.wind,
+        st.session_state.bess,
+        st.session_state.electrolyzer,
+        st.session_state.h2_chain,
+        st.session_state.fuel_cell,
+        st.session_state.ems,
+        st.session_state.forecaster,
     )
     # Runtime states
     st.session_state.sim_running = True
@@ -130,8 +147,6 @@ def _init():
 
 # اجرای init
 _init()
-
-
 # =============================================================================
 # SIDEBAR
 # =============================================================================
@@ -787,7 +802,7 @@ with tabs[7]:
         hrow("Tank Pressure", s.pressure_bar, "bar", (10, 550), (10, 625))
         hrow("Tank Temperature", s.tank_temp_c, "°C", (15, 55), (10, 65))
         hrow("H₂ Purity", s.elec_purity, "%", (99.99, 100), (99.9, 100), ".4f")
-        
+
         if sub:
             hrow("Water Quality", sub["water"].resistance_mohm_cm, "MΩ·cm", (10, 999), (5, 10))
             hrow("H₂ Moisture", sub["dryer"].moisture_ppm, "ppm", (0, 5), (0, 8), ".2f")
