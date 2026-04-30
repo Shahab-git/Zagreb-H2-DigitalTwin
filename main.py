@@ -97,40 +97,47 @@ except AssertionError as e:
 # SESSION STATE
 # =============================================================================
 def _init():
-    # ۱. جلوگیری از اجرای مجدد و مقداردهی اولیه امن
-    if "lumi_v41" in st.session_state:
+    # ۱. بررسی اولیه برای جلوگیری از تکرار کد (فقط یکبار در هر Session اجرا شود)
+    if "lumi_v41" in st.session_state and st.session_state.lumi_v41:
         return
     
-    st.session_state.lumi_v41 = True
+    # ۲. مقداردهی اولیه تمام متغیرهای کلیدی (Provisioning)
+    # این کار باعث می‌شود حتی اگر در مراحل بعدی (Try) اروری رخ داد، UI کرش نکند
+    defaults = {
+        "lumi_v41": True,
+        "sim_running": False,
+        "last_state": None,
+        "last_fc": None,
+        "annual_report": None,
+        "opt_result": None,
+        "sub_result": None,
+        "engine": None,
+        "history": HistoryBuffer(maxlen=120) if 'HistoryBuffer' in globals() else None
+    }
     
-    # ۲. تعریف متغیرهای UI در همین ابتدا (تا ارور AttributeError ندهد)
-    st.session_state.sim_running = False
-    st.session_state.last_state = None
-    st.session_state.last_fc = None
-    st.session_state.annual_report = None
-    st.session_state.opt_result = None
-    st.session_state.sub_result = None
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
 
-    # ۳. تلاش برای لود کردن بقیه موارد با Try-Except
+    # ۳. تلاش برای لود کردن ماژول‌های سنگین و منطق برنامه
     try:
-        # لود کردن دارایی‌های اصلی
+        # لود کردن دارایی‌های فیزیکی
         st.session_state.solar = SolarSystem()
         st.session_state.wind = WindSystem()
         st.session_state.bess = BatteryBESS(0.55)
         
-        # موارد حذف شده
+        # مقداردهی به موارد خالی
         st.session_state.ems = None
         st.session_state.forecaster = None
 
-        # سیستم‌های جانبی
-        st.session_state.history = HistoryBuffer(maxlen=120)
+        # سیستم‌های محاسباتی
         st.session_state.alerts = AlertSystem()
         st.session_state.lcoh_acc = LCOHAccumulator()
         st.session_state.subsystems = SubsystemManager()
         st.session_state.optimizer = EconomicOptimizer(Config)
         st.session_state.scenario_eng = ScenarioEngine(Config)
 
-        # ۴. ساخت موتور
+        # ۴. ساخت موتور اصلی (Core Engine)
         st.session_state.engine = TickEngine(
             Config,
             st.session_state.solar,
@@ -140,15 +147,16 @@ def _init():
             st.session_state.forecaster,
         )
         
-        # اگر همه چیز درست بود، شبیه‌سازی آماده است
-        st.session_state.sim_running = True
+        # اگر تا اینجا اروری نیامد، شبیه‌سازی می‌تواند شروع شود
+        st.session_state.sim_running = False # یا True اگر می‌خواهی اتوماتیک شروع شود
 
     except Exception as e:
-        # این بخش بسیار مهم است؛ ارور واقعی را در صفحه وب به شما نشان می‌دهد
-        st.error(f"⚠️ Initialization Failed: {e}")
-        # برای جلوگیری از کرش کل برنامه در خطوط بعدی:
-        if "engine" not in st.session_state:
-            st.session_state.engine = None
+        # نمایش ارور دقیق برای عیب‌یابی راحت‌تر
+        st.error(f"⚠️ **Initialization Error:** {str(e)}")
+        st.warning("Please check if all asset classes and Config are correctly defined.")
+
+# --- این خط بسیار حیاتی است؛ بدون این، کل کد بالا فقط یک متن است و اجرا نمی‌شود ---
+_init()
 # =============================================================================
 # SIDEBAR
 # =============================================================================
