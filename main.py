@@ -1,4 +1,3 @@
-cat > /home/claude/main_fixed.py << 'ENDOFFILE'
 # =============================================================================
 # main.py — LUMINIH2 Digital Twin Dashboard v4.1
 # White Industrial Theme · Zagreb, Croatia · Full English
