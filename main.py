@@ -106,11 +106,6 @@ def _init():
     st.session_state.wind = WindSystem()
     st.session_state.bess = BatteryBESS(0.55)
 
-
-
-
-    st.session_state.forecaster = AIPredictor()  # تعریف پیش‌بین AI
-
     # Systems
     st.session_state.lcoh_acc = LCOHAccumulator()
     st.session_state.alerts = AlertSystem()
@@ -124,8 +119,6 @@ def _init():
         st.session_state.solar,
         st.session_state.wind,
         st.session_state.bess,
-        
-        st.session_state.forecaster,
     )
     # Runtime states
     st.session_state.sim_running = True
