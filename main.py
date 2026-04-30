@@ -987,4 +987,3 @@ except ImportError:
     time.sleep(refresh)
     st.rerun()
 ENDOFFILE
-echo "done"
