@@ -15,7 +15,7 @@ from config import Config, validate_config
 from energy_assets import SolarSystem, WindSystem, BatteryBESS
 from ai_forecaster import AIPredictor
 from weather_api import WeatherProvider
-from core_engine import TickEngine, LCOHAccumulator, AlertSystem, HistoryBuffer, EMS
+from core_engine import TickEngine, LCOHAccumulator, AlertSystem, HistoryBuffer
 from scenario_engine import ScenarioEngine, ScenarioParams
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
@@ -109,8 +109,6 @@ def _init():
 
 
 
-   
-    st.session_state.ems = EMS()  # تعریف سیستم مدیریت انرژی
     st.session_state.forecaster = AIPredictor()  # تعریف پیش‌بین AI
 
     # Systems
@@ -127,7 +125,6 @@ def _init():
         st.session_state.wind,
         st.session_state.bess,
         
-        st.session_state.ems,
         st.session_state.forecaster,
     )
     # Runtime states
