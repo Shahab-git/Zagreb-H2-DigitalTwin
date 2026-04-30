@@ -97,38 +97,40 @@ except AssertionError as e:
 # SESSION STATE
 # =============================================================================
 def _init():
-    # ۱. جلوگیری از اجرای مجدد
+    # ۱. جلوگیری از اجرای مجدد و مقداردهی اولیه امن
     if "lumi_v41" in st.session_state:
         return
+    
     st.session_state.lumi_v41 = True
-
-    # ۲. مقداردهی اولیه متغیرهای وضعیت (این بخش باید قبل از هر ارور احتمالی باشد)
-    st.session_state.sim_running = False  # مقدار پیش‌فرض
+    
+    # ۲. تعریف متغیرهای UI در همین ابتدا (تا ارور AttributeError ندهد)
+    st.session_state.sim_running = False
     st.session_state.last_state = None
     st.session_state.last_fc = None
     st.session_state.annual_report = None
     st.session_state.opt_result = None
     st.session_state.sub_result = None
-    st.session_state.history = HistoryBuffer(maxlen=120)
-    st.session_state.alerts = AlertSystem()
 
-    # ۳. مقداردهی دارایی‌ها (فقط مواردی که فایلشان موجود است)
+    # ۳. تلاش برای لود کردن بقیه موارد با Try-Except
     try:
+        # لود کردن دارایی‌های اصلی
         st.session_state.solar = SolarSystem()
         st.session_state.wind = WindSystem()
         st.session_state.bess = BatteryBESS(0.55)
         
-        # مقداردهی مواردی که پاک کردیم به عنوان None
+        # موارد حذف شده
         st.session_state.ems = None
         st.session_state.forecaster = None
-        
-        # سایر تحلیل‌گرها
+
+        # سیستم‌های جانبی
+        st.session_state.history = HistoryBuffer(maxlen=120)
+        st.session_state.alerts = AlertSystem()
         st.session_state.lcoh_acc = LCOHAccumulator()
         st.session_state.subsystems = SubsystemManager()
         st.session_state.optimizer = EconomicOptimizer(Config)
         st.session_state.scenario_eng = ScenarioEngine(Config)
 
-        # ۴. تلاش برای ساخت موتور
+        # ۴. ساخت موتور
         st.session_state.engine = TickEngine(
             Config,
             st.session_state.solar,
@@ -137,15 +139,16 @@ def _init():
             st.session_state.ems,
             st.session_state.forecaster,
         )
-        # اگر تا اینجا بدون ارور آمد، شبیه‌سازی می‌تواند شروع شود
+        
+        # اگر همه چیز درست بود، شبیه‌سازی آماده است
         st.session_state.sim_running = True
 
     except Exception as e:
-        st.error(f"Error during engine initialization: {e}")
-        st.session_state.engine = None
-
-# اجرای تابع
-_init()
+        # این بخش بسیار مهم است؛ ارور واقعی را در صفحه وب به شما نشان می‌دهد
+        st.error(f"⚠️ Initialization Failed: {e}")
+        # برای جلوگیری از کرش کل برنامه در خطوط بعدی:
+        if "engine" not in st.session_state:
+            st.session_state.engine = None
 # =============================================================================
 # SIDEBAR
 # =============================================================================
