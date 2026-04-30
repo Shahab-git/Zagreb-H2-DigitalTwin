@@ -106,13 +106,10 @@ def _init():
     st.session_state.wind = WindSystem()
     st.session_state.bess = BatteryBESS(0.55)
 
-    # --- اضافه کردن موارد گمشده که باعث ارور شده بودند ---
-    # این کلاس‌ها باید در فایل‌های پروژه شما (مثل energy_assets.py یا subsystems.py) تعریف شده باشند
-    
 
-    st.session_state.electrolyzer = Electrolyzer()  # تعریف الکترولایزر
-    st.session_state.h2_chain = HydrogenChain()  # تعریف زنجیره هیدروژن (تانک‌ها و ...)
-    st.session_state.fuel_cell = FuelCell()  # تعریف پیل سوختی
+
+
+   
     st.session_state.ems = EMS()  # تعریف سیستم مدیریت انرژی
     st.session_state.forecaster = AIPredictor()  # تعریف پیش‌بین AI
 
@@ -129,9 +126,7 @@ def _init():
         st.session_state.solar,
         st.session_state.wind,
         st.session_state.bess,
-        st.session_state.electrolyzer,
-        st.session_state.h2_chain,
-        st.session_state.fuel_cell,
+        
         st.session_state.ems,
         st.session_state.forecaster,
     )
