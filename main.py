@@ -97,34 +97,53 @@ except AssertionError as e:
 def _init():
     if "lumi_v41" in st.session_state:
         return
-        st.session_state.lumi_v41 = True
-        st.session_state.solar = SolarSystem()
-        st.session_state.wind = WindSystem()
-        st.session_state.bess = BatteryBESS(0.55)
 
-        def _init():
-            st.session_state.lcoh_acc = LCOHAccumulator()
-            st.session_state.alerts = AlertSystem()
-            st.session_state.history = HistoryBuffer(maxlen=120)
-            st.session_state.subsystems = SubsystemManager()
-            st.session_state.optimizer = EconomicOptimizer(Config)
-            st.session_state.scenario_eng = ScenarioEngine(Config)
-            st.session_state.engine = TickEngine(
-                Config,
-                st.session_state.solar, st.session_state.wind,
-                st.session_state.bess, st.session_state.electrolyzer,
-                st.session_state.h2_chain, st.session_state.fuel_cell,
-                st.session_state.ems, st.session_state.forecaster,
-            )
+    st.session_state.lumi_v41 = True
 
-            def _init():
-                st.session_state.sim_running = True
-                st.session_state.last_state = None
-                st.session_state.last_fc = None
-                st.session_state.annual_report = None
-                st.session_state.opt_result = None
-                st.session_state.sub_result = None
-                _init()
+    # Core assets
+    st.session_state.solar = SolarSystem()
+    st.session_state.wind = WindSystem()
+    st.session_state.bess = BatteryBESS(0.55)
+
+    # Optional / required components (در صورت نیاز بعداً مقداردهی واقعی کن)
+    st.session_state.electrolyzer = None
+    st.session_state.h2_chain = None
+    st.session_state.fuel_cell = None
+    st.session_state.ems = None
+    st.session_state.forecaster = AIPredictor()
+
+    # Systems
+    st.session_state.lcoh_acc = LCOHAccumulator()
+    st.session_state.alerts = AlertSystem()
+    st.session_state.history = HistoryBuffer(maxlen=120)
+    st.session_state.subsystems = SubsystemManager()
+    st.session_state.optimizer = EconomicOptimizer(Config)
+    st.session_state.scenario_eng = ScenarioEngine(Config)
+
+    # Engine
+    st.session_state.engine = TickEngine(
+        Config,
+        st.session_state.solar,
+        st.session_state.wind,
+        st.session_state.bess,
+        st.session_state.electrolyzer,
+        st.session_state.h2_chain,
+        st.session_state.fuel_cell,
+        st.session_state.ems,
+        st.session_state.forecaster,
+    )
+
+    # Runtime states
+    st.session_state.sim_running = True
+    st.session_state.last_state = None
+    st.session_state.last_fc = None
+    st.session_state.annual_report = None
+    st.session_state.opt_result = None
+    st.session_state.sub_result = None
+
+
+# اجرای init
+_init()
 
 
 # =============================================================================
@@ -773,56 +792,68 @@ with tabs[7]:
                 f'<span style="color:#8b949e;font-size:13px;">{lbl}</span>'
                 f'<span class="kpi-val {cls}" style="font-size:14px;">'
                 f'{ic} {v:{fmt}} {unit}</span></div>',
+                unsafe_allow_html=True
+            )
+        hrow("BESS SoC", s.bess_soc_pct, "%", (20, 90), (10, 95))
+        hrow("BESS Temperature", s.bess_temp_c, "°C", (10, 45), (0, 55))
+        hrow("BESS SoH", s.bess_soh_pct, "%", (85, 100), (75, 100))
+        hrow("Stack SoH", s.elec_soh_pct, "%", (85, 100), (75, 100))
+        hrow("Tank Pressure", s.pressure_bar, "bar", (10, 550), (10, 625))
+        hrow("Tank Temperature", s.tank_temp_c, "°C", (15, 55), (10, 65))
+        hrow("H₂ Purity", s.elec_purity, "%", (99.99, 100), (99.9, 100), ".4f")
+        
+        if sub:
+            hrow("Water Quality", sub["water"].resistance_mohm_cm, "MΩ·cm", (10, 999), (5, 10))
+            hrow("H₂ Moisture", sub["dryer"].moisture_ppm, "ppm", (0, 5), (0, 8), ".2f")
+            hrow("Stack Temp", sub["warmup"].current_temp_c, "°C", (20, 65), (15, 70))
+with c2:
+    st.markdown('<p class="sec-hdr">Active alerts</p>', unsafe_allow_html=True)
+    if not alrt.active:
+        st.markdown(
+            '<div class="alert-info">✅ No active alerts — all systems nominal</div>',
+            unsafe_allow_html=True)
+    else:
+        for a in alrt.active:
+            cls = {"error": "alert-error", "warning": "alert-warning",
+                   "info": "alert-info"}.get(a.level, "alert-info")
+            ic = {"error": "🚨", "warning": "⚠", "info": "ℹ"}.get(a.level, "ℹ")
+            st.markdown(
+                f'<div class="{cls}">{ic} <b>[{a.code}]</b> {a.message}'
+                f'<span style="float:right;opacity:.5">{a.ts}</span></div>',
                 unsafe_allow_html=True)
-            hrow("BESS SoC", s.bess_soc_pct, "%", (20, 90), (10, 95))
-            hrow("BESS Temperature", s.bess_temp_c, "°C", (10, 45), (0, 55))
-            hrow("BESS SoH", s.bess_soh_pct, "%", (85, 100), (75, 100))
-            hrow("Stack SoH", s.elec_soh_pct, "%", (85, 100), (75, 100))
-            hrow("Tank Pressure", s.pressure_bar, "bar", (10, 550), (10, 625))
-            hrow("Tank Temperature", s.tank_temp_c, "°C", (15, 55), (10, 65))
-            hrow("H₂ Purity", s.elec_purity, "%", (99.99, 100), (99.9, 100), ".4f")
-            if sub:
-                hrow("Water Quality", sub["water"].resistance_mohm_cm, "MΩ·cm", (10, 999), (5, 10))
-                hrow("H₂ Moisture", sub["dryer"].moisture_ppm, "ppm", (0, 5), (0, 8), ".2f")
-                hrow("Stack Temp", sub["warmup"].current_temp_c, "°C", (20, 65), (15, 70))
-                with c2:
-                    st.markdown('<p class="sec-hdr">Active alerts</p>', unsafe_allow_html=True)
-                    if not alrt.active:
-                        st.markdown(
-                            '<div class="alert-info">✅ No active alerts — all systems nominal</div>',
-                            unsafe_allow_html=True)
-            else:
-                for a in alrt.active:
-                    cls = {"error": "alert-error", "warning": "alert-warning",
-                           "info": "alert-info"}.get(a.level, "alert-info")
-                    ic = {"error": "🚨", "warning": "⚠", "info": "ℹ"}.get(a.level, "ℹ")
-                    st.markdown(
-                        f'<div class="{cls}">{ic} <b>[{a.code}]</b> {a.message}'
-                        f'<span style="float:right;opacity:.5">{a.ts}</span></div>',
-                        unsafe_allow_html=True)
-                    st.markdown('<p class="sec-hdr">Device safety limits</p>', unsafe_allow_html=True)
-                    limits = {
-                        "BESS thermal runaway": f"{Config.THERMAL_RUNAWAY_TEMP}°C (LFP)",
-                        "Tank MWP (TH540-50)": f"{Config.SAFETY_MAX_PRESSURE_BAR} bar",
-                        "Emergency SoC": f"{Config.EMERGENCY_SHUTDOWN_SOC * 100:.0f}%",
-                        "Leak threshold": f"{Config.LEAK_DETECTION_THRESHOLD:.2e} kg/h",
-                        "Water quality": "> 10 MΩ·cm (DIN ISO 3696 T1)",
-                        "H₂ moisture (AIRCELL)": "< 5 ppm",
-                        "Electrolyzer range": f"{Config.electrolyzer.water_temp_min_c}–{Config.electrolyzer.water_temp_max_c}°C",
-                        "Compressor outlet": f"max {Config.compressor.outlet_max_bar} bar (HCS-100)",
-                    }
-                    for k_, v_ in limits.items():
-                        st.markdown(
-                            f'<div style="display:flex;justify-content:space-between;'
-                            f'padding:5px 0;border-bottom:1px solid #21262d;">'
-                            f'<span style="color:#8b949e;font-size:12px;">{k_}</span>'
-                            f'<span style="color:#e6edf3;font-size:12px;">{v_}</span></div>',
-                            unsafe_allow_html=True)
-                        ld_c = "badge-red" if s.leak_detected else "badge-green"
-                        st.markdown(
-                            f'<br><span class="badge {ld_c}" style="font-size:13px;padding:6px 14px;">'
-                            f'{"⚠ H₂ LEAK DETECTED" if s.leak_detected else "✅ No leak detected"}'
-                            f'</span>', unsafe_allow_html=True)
+            st.markdown('<p class="sec-hdr">Device safety limits</p>', unsafe_allow_html=True)
+            limits = {
+                "BESS thermal runaway": f"{Config.THERMAL_RUNAWAY_TEMP}°C (LFP)",
+                "Tank MWP (TH540-50)": f"{Config.SAFETY_MAX_PRESSURE_BAR} bar",
+                "Emergency SoC": f"{Config.EMERGENCY_SHUTDOWN_SOC * 100:.0f}%",
+                "Leak threshold": f"{Config.LEAK_DETECTION_THRESHOLD:.2e} kg/h",
+                "Water quality": "> 10 MΩ·cm (DIN ISO 3696 T1)",
+                "H₂ moisture (AIRCELL)": "< 5 ppm",
+                "Electrolyzer range": f"{Config.electrolyzer.water_temp_min_c}–{Config.electrolyzer.water_temp_max_c}°C",
+                "Compressor outlet": f"max {Config.compressor.outlet_max_bar} bar (HCS-100)",
+            }
+            for k_, v_ in limits.items():
+                st.markdown(
+                    f'<div style="display:flex;justify-content:space-between;'
+                    f'padding:5px 0;border-bottom:1px solid #21262d;">'
+                    f'<span style="color:#8b949e;font-size:12px;">{k_}</span>'
+                    f'<span style="color:#e6edf3;font-size:12px;">{v_}</span></div>',
+                    unsafe_allow_html=True)
+                ld_c = "badge-red" if s.leak_detected else "badge-green"
+                st.markdown(
+                    f'<br><span class="badge {ld_c}" style="font-size:13px;padding:6px 14px;">'
+                    f'{"⚠ H₂ LEAK DETECTED" if s.leak_detected else "✅ No leak detected"}'
+                    f'</span>', unsafe_allow_html=True)
+# =============================================================================
+# AUTO-REFRESH
+# =============================================================================
+try:
+    from streamlit_autorefresh import st_autorefresh
+    st_autorefresh(interval=refresh * 1000, key="lumi_v41_r")
+except ImportError:
+    import time;
+    time.sleep(refresh);
+    st.rerun()
 
 
 
