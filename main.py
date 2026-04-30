@@ -19,6 +19,8 @@ from core_engine import TickEngine, LCOHAccumulator, AlertSystem, HistoryBuffer
 from scenario_engine import ScenarioEngine, ScenarioParams
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
+from core_engine import EMS  # مطمئن شوید ایمپورت شده
+from ai_forecaster import AIPredictor
 
 
 # =============================================================================
@@ -99,37 +101,47 @@ def _init():
     if "lumi_v41" in st.session_state:
         return
 
-    st.session_state.lumi_v41 = True
+st.session_state.lumi_v41 = True
 
-    # Core assets
-    st.session_state.solar = SolarSystem()
-    st.session_state.wind = WindSystem()
-    st.session_state.bess = BatteryBESS(0.55)
+# 1. مقداردهی دارایی‌ها
+st.session_state.solar = SolarSystem()
+st.session_state.wind = WindSystem()
+st.session_state.bess = BatteryBESS(0.55)
 
-    # Systems
-    st.session_state.lcoh_acc = LCOHAccumulator()
-    st.session_state.alerts = AlertSystem()
-    st.session_state.history = HistoryBuffer(maxlen=120)
-    st.session_state.subsystems = SubsystemManager()
-    st.session_state.optimizer = EconomicOptimizer(Config)
-    st.session_state.scenario_eng = ScenarioEngine(Config)
+# 2. مقداردهی سیستم‌های جانبی
+ # مطمئن شوید ایمپورت شده
 
-    st.session_state.engine = TickEngine(
-        Config,
-        st.session_state.solar,
-        st.session_state.wind,
-        st.session_state.bess,
-    )
-    # Runtime states
-    st.session_state.sim_running = True
-    st.session_state.last_state = None
-    st.session_state.last_fc = None
-    st.session_state.annual_report = None
-    st.session_state.opt_result = None
-    st.session_state.sub_result = None
+st.session_state.ems = EMS()
+st.session_state.forecaster = AIPredictor()
 
+# 3. بافرها و تحلیل‌گرها
+st.session_state.lcoh_acc = LCOHAccumulator()
+st.session_state.alerts = AlertSystem()
+st.session_state.history = HistoryBuffer(maxlen=120)
+st.session_state.subsystems = SubsystemManager()
+st.session_state.optimizer = EconomicOptimizer(Config)
+st.session_state.scenario_eng = ScenarioEngine(Config)
 
-# اجرای init
+# 4. مقداردهی موتور اصلی (اصلاح شده)
+# حتماً باید این 6 مورد را اینجا بنویسید تا ارور برطرف شود
+st.session_state.engine = TickEngine(
+    Config,  # 1
+    st.session_state.solar,  # 2
+    st.session_state.wind,  # 3
+    st.session_state.bess,  # 4
+    st.session_state.ems,  # 5
+    st.session_state.forecaster  # 6
+)
+
+# 5. وضعیت‌های زمان اجرا
+st.session_state.sim_running = True
+st.session_state.last_state = None
+st.session_state.last_fc = None
+st.session_state.annual_report = None
+st.session_state.opt_result = None
+st.session_state.sub_result = None
+
+# اجرا
 _init()
 # =============================================================================
 # SIDEBAR
