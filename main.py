@@ -509,7 +509,14 @@ with tabs[2]:
             f10.add_hline(y=55,line_dash="dash",line_color=C["solar"],annotation_text="⚠ 55°C")
             f10.add_hline(y=Config.THERMAL_RUNAWAY_TEMP,line_dash="dash",
                 line_color=C["fc"],annotation_text="🔥 Runaway")
-            f10.update_layout(**mk(height=170,yaxis_title="°C"))
+            f10.update_layout(**mk(
+                height=170,
+                yaxis=dict(
+                    title="°C",
+                    title_font=dict(color="#111827"),
+                    tickfont=dict(color="#111827")
+    )
+))
             st.plotly_chart(f10, use_container_width=True)
 
     with c2:
