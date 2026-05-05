@@ -21,6 +21,31 @@ from scenario_engine import ScenarioEngine, ScenarioParams
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
 
+def build_welcome_text(s, alrt, wx_src):
+    now = datetime.now(timezone(timedelta(hours=2)))
+    hour = now.hour
+    greet = "Good morning" if hour < 12 else ("Good afternoon" if hour < 17 else "Good evening")
+    day   = now.strftime("%A")
+    date  = now.strftime("%B %d, %Y")
+    time_ = now.strftime("%H:%M")
+    
+    text  = f"{greet}. Welcome to LUMINIH2 Digital Twin. "
+    text += f"Today is {day}, {date}. Time in Zagreb: {time_}. "
+    text += f"Generation: {s.total_gen_kw:.1f} kilowatts. "
+    text += f"Battery at {s.bess_soc_pct:.0f} percent. "
+    text += f"Hydrogen rate: {s.h2_kg_h*1000:.1f} grams per hour. "
+    text += f"LCOH: {s.lcoh:.2f} euros per kilogram. "
+    
+    if alrt.errors():
+        text += f"{len(alrt.errors())} critical alert. Immediate attention required. "
+    elif alrt.warnings():
+        text += f"{len(alrt.warnings())} warning active. "
+    else:
+        text += "All systems nominal. "
+    
+    text += "Have a productive session."
+    return text
+
 st.set_page_config(
     page_title="LUMINIH2 Digital Twin",
     page_icon="⚡",
@@ -331,31 +356,6 @@ def hd(col=None):
     if len(hist) < 2: return False
     if col: return col in hist.columns and hist[col].notna().any()
     return True
-    
-def build_welcome_text(s, alrt, wx_src):
-    now = datetime.now(timezone(timedelta(hours=2)))
-    hour = now.hour
-    greet = "Good morning" if hour < 12 else ("Good afternoon" if hour < 17 else "Good evening")
-    day   = now.strftime("%A")
-    date  = now.strftime("%B %d, %Y")
-    time_ = now.strftime("%H:%M")
-    
-    text  = f"{greet}. Welcome to LUMINIH2 Digital Twin. "
-    text += f"Today is {day}, {date}. Time in Zagreb: {time_}. "
-    text += f"Generation: {s.total_gen_kw:.1f} kilowatts. "
-    text += f"Battery at {s.bess_soc_pct:.0f} percent. "
-    text += f"Hydrogen rate: {s.h2_kg_h*1000:.1f} grams per hour. "
-    text += f"LCOH: {s.lcoh:.2f} euros per kilogram. "
-    
-    if alrt.errors():
-        text += f"{len(alrt.errors())} critical alert. Immediate attention required. "
-    elif alrt.warnings():
-        text += f"{len(alrt.warnings())} warning active. "
-    else:
-        text += "All systems nominal. "
-    
-    text += "Have a productive session."
-    return text
 
 # ── TAB 1: ACQUISITION ────────────────────────────────────────────────────────
 with tabs[0]:
