@@ -842,7 +842,7 @@ with tabs[6]:
 
         fc_fig = go.Figure()
 
-        # Efficiency Trace - سبز تیره زمردی
+        # Efficiency Trace
         fc_fig.add_trace(go.Scatter(
             x=odf["Power (kW)"],
             y=odf["η (%)"],
@@ -851,7 +851,7 @@ with tabs[6]:
             yaxis="y"
         ))
 
-        # LCOH Trace - آبی تیره نفتی
+        # LCOH Trace
         fc_fig.add_trace(go.Scatter(
             x=odf["Power (kW)"],
             y=odf["LCOH (€/kg)"],
@@ -860,27 +860,27 @@ with tabs[6]:
             yaxis="y2"
         ))
 
-        # تنظیمات چیدمان با تمرکز بر تیرگی نوشته‌ها
+        # تنظیمات چیدمان اصلاح شده
         fc_fig.update_layout(**mk(
             height=300,
             xaxis=dict(
-                title="Power (kW)",
+                title="<b>Power (kW)</b>", # استفاده از تگ HTML برای ضخیم کردن
                 titlefont=dict(color="black", size=13),
                 tickfont=dict(color="black")
             ),
             yaxis=dict(
-                title="Efficiency (%)",
-                titlefont=dict(color="#064e3b", size=13, weight="bold"),
+                title="<b>Efficiency (%)</b>",
+                titlefont=dict(color="#064e3b", size=13),
                 tickfont=dict(color="#064e3b"),
-                gridcolor="#f0f0f0" # شبکه کم‌رنگ برای خوانایی بهتر
+                gridcolor="#f0f0f0"
             ),
             yaxis2=dict(
-                title="LCOH (€/kg)",
-                titlefont=dict(color="#1e3a8a", size=13, weight="bold"),
+                title="<b>LCOH (€/kg)</b>",
+                titlefont=dict(color="#1e3a8a", size=13),
                 tickfont=dict(color="#1e3a8a"),
                 overlaying="y",
                 side="right",
-                showgrid=False # جلوگیری از شلوغ شدن نمودار
+                showgrid=False
             ),          
             legend=dict(
                 orientation="h",
@@ -891,7 +891,7 @@ with tabs[6]:
                 font=dict(color="black")
             ),
             margin=dict(l=40, r=40, t=40, b=40),
-            plot_bgcolor="white" # اطمینان از سفید بودن پس‌زمینه
+            plot_bgcolor="white"
         ))
 
         st.plotly_chart(fc_fig, use_container_width=True)
