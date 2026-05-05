@@ -776,11 +776,12 @@ with tabs[5]:
         rc2[3].metric("BESS life remaining",f"{rpt.bess_remaining_life_pct:.1f}%")
     else:
         st.info("Click **▶ Run Annual Simulation** to generate the 365-day report.")
-
 # ── TAB 7: OPTIMIZER ──────────────────────────────────────────────────────────
 with tabs[6]:
-    st.markdown('<p class="sec-hdr">Economic operating point optimiser — ITM S30/30</p>',
-                unsafe_allow_html=True)
+    st.markdown(
+        '<p class="sec-hdr">Economic operating point optimiser — ITM S30/30</p>',
+        unsafe_allow_html=True
+    )
 
     oc1, oc2 = st.columns(2)
 
@@ -795,58 +796,63 @@ with tabs[6]:
             3.0, 12.0, sc_h2_price, 0.5
         )
 
-        # ── Energy source selector (clean + visible)
+        # ── ENERGY SOURCE (VISUAL SEGMENT CONTROL - FIXED)
         st.markdown("### Energy source")
 
-        opt_source = st.radio(
-            label="",
-            options=["renewable", "grid"],
-            horizontal=True,
-            format_func=lambda x: (
-                "🌿 Renewable power (PV + Wind)" if x == "renewable"
-                else "⚡ Grid electricity"
-            )
-        )
+        if "opt_source" not in st.session_state:
+            st.session_state.opt_source = "renewable"
 
-        # ── FIXED COLOR STYLE (no :has)
+        col_a, col_b = st.columns(2)
+
+        renewable_active = st.session_state.opt_source == "renewable"
+        grid_active = st.session_state.opt_source == "grid"
+
+        with col_a:
+            if st.button(
+                "🌿 Renewable\nPV + Wind",
+                use_container_width=True
+            ):
+                st.session_state.opt_source = "renewable"
+
+        with col_b:
+            if st.button(
+                "⚡ Grid electricity",
+                use_container_width=True
+            ):
+                st.session_state.opt_source = "grid"
+
+        opt_source = st.session_state.opt_source
+
+        # ── CLEAN VISUAL STYLE (NO :has, NO BROKEN SELECTORS)
         st.markdown("""
         <style>
-        div.row-widget.stRadio > div {
-            flex-direction: row;
-            gap: 10px;
-        }
-
-        div.row-widget.stRadio label {
-            padding: 8px 14px;
-            border-radius: 10px;
-            font-weight: 700;
-            border: 1px solid #e2e8f0;
-            cursor: pointer;
-        }
-
-        /* default (unselected) */
-        div.row-widget.stRadio label {
+        div.stButton > button {
+            height: 72px;
+            font-size: 15px;
+            font-weight: 800;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            white-space: pre-line;
             background: #ffffff;
             color: #111827;
+            transition: all 0.2s ease;
         }
 
-        /* selected state */
-        div.row-widget.stRadio label[data-checked="true"] {
-            transform: scale(1.02);
+        div.stButton > button:hover {
+            border-color: #0ea5e9;
+            transform: scale(1.01);
         }
 
-        /* renewable highlight */
-        div.row-widget.stRadio label:has(input[value="renewable"]) {
-            border-left: 4px solid #16a34a;
-        }
-
-        /* grid highlight */
-        div.row-widget.stRadio label:has(input[value="grid"]) {
-            border-left: 4px solid #2563eb;
+        /* Active highlight simulation */
+        div.stButton > button:focus {
+            outline: none;
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 2px rgba(14,165,233,0.2);
         }
         </style>
         """, unsafe_allow_html=True)
 
+    # ── RUN OPTIMIZER
     if st.button("🔍 Find Optimal Operating Point"):
         opt_res = st.session_state.optimizer.find_optimal_operating_point(
             available_power_kw=opt_power,
@@ -858,6 +864,7 @@ with tabs[6]:
 
     opt_res = st.session_state.opt_result
 
+    # ── RESULTS
     if opt_res and opt_res.all_points:
         bl = opt_res.best_lcoh_point
         bp = opt_res.best_profit_point
@@ -865,34 +872,69 @@ with tabs[6]:
         oc = st.columns(2)
 
         with oc[0]:
-            st.markdown('<p class="sec-hdr">Best LCOH point</p>', unsafe_allow_html=True)
-            kpi(st, "Load", f"{bl.elec_power_kw:.2f} kW",
+            st.markdown(
+                '<p class="sec-hdr">Best LCOH point</p>',
+                unsafe_allow_html=True
+            )
+
+            kpi(
+                st, "Load",
+                f"{bl.elec_power_kw:.2f} kW",
                 f"H₂ {bl.h2_rate_kg_h*1000:.1f} g/h · η {bl.efficiency_pct:.1f}%",
-                "kpi-cyan")
-            st.metric("LCOH", f"€{bl.lcoh_eur_kg:.3f}/kg",
-                      delta=f"vs target €{Config.LCOH_TARGET_EURO_KG}")
-            st.metric("Annual net profit", f"€{bl.net_profit_eur:,.0f}")
+                "kpi-cyan"
+            )
+
+            st.metric(
+                "LCOH",
+                f"€{bl.lcoh_eur_kg:.3f}/kg",
+                delta=f"vs target €{Config.LCOH_TARGET_EURO_KG}"
+            )
+
+            st.metric(
+                "Annual net profit",
+                f"€{bl.net_profit_eur:,.0f}"
+            )
 
         with oc[1]:
-            st.markdown('<p class="sec-hdr">Best profit point</p>', unsafe_allow_html=True)
-            kpi(st, "Load", f"{bp.elec_power_kw:.2f} kW",
+            st.markdown(
+                '<p class="sec-hdr">Best profit point</p>',
+                unsafe_allow_html=True
+            )
+
+            kpi(
+                st, "Load",
+                f"{bp.elec_power_kw:.2f} kW",
                 f"H₂ {bp.h2_rate_kg_h*1000:.1f} g/h · η {bp.efficiency_pct:.1f}%",
-                "kpi-green")
-            st.metric("LCOH", f"€{bp.lcoh_eur_kg:.3f}/kg")
-            st.metric("Annual net profit", f"€{bp.net_profit_eur:,.0f}")
+                "kpi-green"
+            )
+
+            st.metric(
+                "LCOH",
+                f"€{bp.lcoh_eur_kg:.3f}/kg"
+            )
+
+            st.metric(
+                "Annual net profit",
+                f"€{bp.net_profit_eur:,.0f}"
+            )
 
         st.markdown(
             f'<div class="alert-info">💡 {opt_res.recommendation}<br>{opt_res.reason}</div>',
             unsafe_allow_html=True
         )
 
-        st.markdown('<p class="sec-hdr">S30/30 operating curve</p>', unsafe_allow_html=True)
+        # ── CURVE
+        st.markdown(
+            '<p class="sec-hdr">S30/30 operating curve</p>',
+            unsafe_allow_html=True
+        )
 
         pts = opt_res.all_points
+
         odf = pd.DataFrame({
             "Power (kW)": [p.elec_power_kw for p in pts],
-            "η (%)":      [p.efficiency_pct for p in pts],
-            "LCOH (€/kg)":[p.lcoh_eur_kg for p in pts],
+            "η (%)": [p.efficiency_pct for p in pts],
+            "LCOH (€/kg)": [p.lcoh_eur_kg for p in pts],
         })
 
         fc_fig = go.Figure()
