@@ -832,6 +832,7 @@ with tabs[6]:
         st.markdown(f'<div class="alert-info">💡 {opt_res.recommendation}<br>{opt_res.reason}</div>',
                     unsafe_allow_html=True)
 
+        # ── بخش نمودار با اصلاح رنگ محورها ──────────────────────────────────────────
         st.markdown('<p class="sec-hdr">S30/30 operating curve</p>', unsafe_allow_html=True)
         pts = opt_res.all_points
         odf = pd.DataFrame({
@@ -839,18 +840,23 @@ with tabs[6]:
             "η (%)": [p.efficiency_pct for p in pts],
             "LCOH (€/kg)": [p.lcoh_eur_kg for p in pts],
         })
+        
         fc_fig = go.Figure()
         fc_fig.add_trace(go.Scatter(x=odf["Power (kW)"], y=odf["η (%)"],
                                     line=dict(color=C["elec"], width=2), name="η (%)", yaxis="y"))
         fc_fig.add_trace(go.Scatter(x=odf["Power (kW)"], y=odf["LCOH (€/kg)"],
                                     line=dict(color=C["h2"], width=2, dash="dash"), name="LCOH €/kg", yaxis="y2"))
+        
         fc_fig.add_vline(x=bl.elec_power_kw, line_dash="dot", line_color=C["bess"],
                          annotation_text="Best LCOH", annotation_font_color=C["bess"])
         fc_fig.add_vline(x=bp.elec_power_kw, line_dash="dot", line_color=C["solar"],
                          annotation_text="Best profit", annotation_font_color=C["solar"])
+        
+        # اصلاح رنگ در اینجا: تغییر color به "black"
         fc_fig.update_layout(**mk(height=280,
                                   yaxis=dict(title="Efficiency (%)", color="black"), # تیره شد
                                   yaxis2=dict(title="LCOH (€/kg)", overlaying="y", side="right", color="black"))) # تیره شد
+        
         st.plotly_chart(fc_fig, use_container_width=True)
 
         st.markdown('<p class="sec-hdr">Sensitivity analysis</p>', unsafe_allow_html=True)
