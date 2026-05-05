@@ -796,58 +796,30 @@ with tabs[6]:
             3.0, 12.0, sc_h2_price, 0.5
         )
 
-        # ── ENERGY SOURCE (VISUAL SEGMENT CONTROL - FIXED)
-        st.markdown("### Energy source")
+        # ── ONLY CLEAN ENERGY SOURCE SECTION (VISIBLE + SIMPLE)
+        st.markdown(
+            '<p style="font-size:14px;font-weight:800;color:#111827;margin:8px 0 6px">'
+            'Energy source</p>',
+            unsafe_allow_html=True
+        )
 
-        if "opt_source" not in st.session_state:
-            st.session_state.opt_source = "renewable"
+        opt_source = st.radio(
+            label="",
+            options=["renewable", "grid"],
+            horizontal=True
+        )
 
-        col_a, col_b = st.columns(2)
-
-        renewable_active = st.session_state.opt_source == "renewable"
-        grid_active = st.session_state.opt_source == "grid"
-
-        with col_a:
-            if st.button(
-                "🌿 Renewable\nPV + Wind",
-                use_container_width=True
-            ):
-                st.session_state.opt_source = "renewable"
-
-        with col_b:
-            if st.button(
-                "⚡ Grid electricity",
-                use_container_width=True
-            ):
-                st.session_state.opt_source = "grid"
-
-        opt_source = st.session_state.opt_source
-
-        # ── CLEAN VISUAL STYLE (NO :has, NO BROKEN SELECTORS)
+        # ── VISUAL FIX (ONLY EMPHASIZE TEXT, NO COMPLEX CSS)
         st.markdown("""
         <style>
-        div.stButton > button {
-            height: 72px;
-            font-size: 15px;
-            font-weight: 800;
-            border-radius: 12px;
-            border: 2px solid #e2e8f0;
-            white-space: pre-line;
-            background: #ffffff;
-            color: #111827;
-            transition: all 0.2s ease;
-        }
-
-        div.stButton > button:hover {
-            border-color: #0ea5e9;
-            transform: scale(1.01);
-        }
-
-        /* Active highlight simulation */
-        div.stButton > button:focus {
-            outline: none;
-            border-color: #0ea5e9;
-            box-shadow: 0 0 0 2px rgba(14,165,233,0.2);
+        div.row-widget.stRadio label {
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            padding: 6px 12px !important;
+            border-radius: 8px !important;
+            border: 1px solid #e2e8f0 !important;
+            color: #111827 !important;
+            background: #ffffff !important;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -878,9 +850,10 @@ with tabs[6]:
             )
 
             kpi(
-                st, "Load",
+                st,
+                "Load",
                 f"{bl.elec_power_kw:.2f} kW",
-                f"H₂ {bl.h2_rate_kg_h*1000:.1f} g/h · η {bl.efficiency_pct:.1f}%",
+                f"H₂ {bl.h2_rate_kg_h * 1000:.1f} g/h · η {bl.efficiency_pct:.1f}%",
                 "kpi-cyan"
             )
 
@@ -902,9 +875,10 @@ with tabs[6]:
             )
 
             kpi(
-                st, "Load",
+                st,
+                "Load",
                 f"{bp.elec_power_kw:.2f} kW",
-                f"H₂ {bp.h2_rate_kg_h*1000:.1f} g/h · η {bp.efficiency_pct:.1f}%",
+                f"H₂ {bp.h2_rate_kg_h * 1000:.1f} g/h · η {bp.efficiency_pct:.1f}%",
                 "kpi-green"
             )
 
