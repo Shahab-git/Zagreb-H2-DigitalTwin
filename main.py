@@ -585,28 +585,28 @@ with tabs[3]:
             f15.add_trace(go.Scatter(x=hist["time"],y=hist["grid_export_kw"],
                 fill="tozeroy",fillcolor="rgba(148,163,184,.2)",
                 line=dict(color=C["grid"],width=2),name="Grid export"))
-            f15.add_trace(go.Scatter(x=hist["time"],y=hist["ev_kw"],
-                fill="tozeroy",fillcolor="rgba(96,165,250,.2)",
-                line=dict(color=C["ev"],width=2),name="EV load"))
-            f15.update_layout(**mk(
-                height=210,
-                yaxis=dict(
-                    title="kW",
-                    title_font=dict(color="#111827"),
-        tickfont=dict(color="#111827")
-    )
-))
-            st.plotly_chart(f15, use_container_width=True)
-
-        f16 = go.Figure(go.Pie(
-            values=[max(.01,s.ev_kw),max(.01,s.grid_export_kw),max(.01,s.heat_kw)],
-            labels=["EV Charging","Grid Export","Heat Recovery"],
-            hole=0.55,
-            marker=dict(
-    colors=[C["ev"], C["grid"], C["solar"]],
-    line=dict(color="#ffffff", width=2)
-    )             
-))
+        f15.add_trace(go.Scatter(
+            x=hist["time"],
+            y=hist["ev_kw"],
+            fill="tozeroy",
+            fillcolor="rgba(96,165,250,.2)",
+            line=dict(color=C["ev"], width=2),
+            name="EV load"
+        ))
+        
+        f15.update_layout(**mk(
+            height=210,
+            yaxis=dict(
+                title="Power (kW)",
+                title_font=dict(color="#111827"),
+                tickfont=dict(color="#111827")
+            ),
+            xaxis=dict(
+                title="Time",
+                title_font=dict(color="#111827"),
+                tickfont=dict(color="#111827")
+            )
+        ))
 
 f16.update_layout(**mk(
     height=210,
