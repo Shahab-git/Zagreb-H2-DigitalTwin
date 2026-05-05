@@ -781,11 +781,55 @@ with tabs[5]:
 with tabs[6]:
     st.markdown('<p class="sec-hdr">Economic operating point optimiser — ITM S30/30</p>',
                 unsafe_allow_html=True)
-    oc1,oc2 = st.columns(2)
+
+    oc1, oc2 = st.columns(2)
+
     with oc1:
-        opt_power    = st.slider("Available renewable power (kW)",0.0,15.0,float(s.total_gen_kw),0.1)
-        opt_h2_price = st.slider("H₂ sell price (€/kg)",3.0,12.0,sc_h2_price,0.5)
-        opt_source   = st.radio("Energy source",["renewable","grid"],horizontal=True)
+        opt_power = st.slider(
+            "Available renewable power (kW)",
+            0.0, 15.0, float(s.total_gen_kw), 0.1
+        )
+
+        opt_h2_price = st.slider(
+            "H₂ sell price (€/kg)",
+            3.0, 12.0, sc_h2_price, 0.5
+        )
+
+        # 🌿⚡ Colored energy source selector
+        opt_source = st.radio(
+            "Energy source",
+            ["renewable", "grid"],
+            horizontal=True,
+            format_func=lambda x: "🌿 renewable" if x == "renewable" else "⚡ grid"
+        )
+
+    # 🎨 UI color enhancement (renewable vs grid)
+    st.markdown("""
+    <style>
+    div[role="radiogroup"] label {
+        padding: 6px 12px;
+        border-radius: 8px;
+        margin-right: 6px;
+        border: 1px solid #e2e8f0;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+    /* renewable */
+    div[role="radiogroup"] label:has(input[value="renewable"]) {
+        color: #16a34a !important;
+        background: #dcfce7;
+        border-color: #86efac;
+    }
+
+    /* grid */
+    div[role="radiogroup"] label:has(input[value="grid"]) {
+        color: #2563eb !important;
+        background: #dbeafe;
+        border-color: #93c5fd;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     if st.button("🔍 Find Optimal Operating Point"):
         opt_res = st.session_state.optimizer.find_optimal_operating_point(
@@ -796,57 +840,105 @@ with tabs[6]:
         st.session_state.opt_result = opt_res
 
     opt_res = st.session_state.opt_result
+
     if opt_res and opt_res.all_points:
-        bl = opt_res.best_lcoh_point; bp = opt_res.best_profit_point
+        bl = opt_res.best_lcoh_point
+        bp = opt_res.best_profit_point
+
         oc = st.columns(2)
+
         with oc[0]:
             st.markdown('<p class="sec-hdr">Best LCOH point</p>', unsafe_allow_html=True)
-            kpi(st,"Load",f"{bl.elec_power_kw:.2f} kW",
-                f"H₂ {bl.h2_rate_kg_h*1000:.1f} g/h · η {bl.efficiency_pct:.1f}%","kpi-cyan")
-            st.metric("LCOH",f"€{bl.lcoh_eur_kg:.3f}/kg",
+            kpi(st, "Load", f"{bl.elec_power_kw:.2f} kW",
+                f"H₂ {bl.h2_rate_kg_h*1000:.1f} g/h · η {bl.efficiency_pct:.1f}%",
+                "kpi-cyan")
+            st.metric("LCOH", f"€{bl.lcoh_eur_kg:.3f}/kg",
                       delta=f"vs target €{Config.LCOH_TARGET_EURO_KG}")
-            st.metric("Annual net profit",f"€{bl.net_profit_eur:,.0f}")
+            st.metric("Annual net profit", f"€{bl.net_profit_eur:,.0f}")
+
         with oc[1]:
             st.markdown('<p class="sec-hdr">Best profit point</p>', unsafe_allow_html=True)
-            kpi(st,"Load",f"{bp.elec_power_kw:.2f} kW",
-                f"H₂ {bp.h2_rate_kg_h*1000:.1f} g/h · η {bp.efficiency_pct:.1f}%","kpi-green")
-            st.metric("LCOH",f"€{bp.lcoh_eur_kg:.3f}/kg")
-            st.metric("Annual net profit",f"€{bp.net_profit_eur:,.0f}")
+            kpi(st, "Load", f"{bp.elec_power_kw:.2f} kW",
+                f"H₂ {bp.h2_rate_kg_h*1000:.1f} g/h · η {bp.efficiency_pct:.1f}%",
+                "kpi-green")
+            st.metric("LCOH", f"€{bp.lcoh_eur_kg:.3f}/kg")
+            st.metric("Annual net profit", f"€{bp.net_profit_eur:,.0f}")
 
-        st.markdown(f'<div class="alert-info">💡 {opt_res.recommendation}<br>{opt_res.reason}</div>',
-                    unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="alert-info">💡 {opt_res.recommendation}<br>{opt_res.reason}</div>',
+            unsafe_allow_html=True
+        )
 
         st.markdown('<p class="sec-hdr">S30/30 operating curve</p>', unsafe_allow_html=True)
+
         pts = opt_res.all_points
         odf = pd.DataFrame({
             "Power (kW)": [p.elec_power_kw for p in pts],
             "η (%)":      [p.efficiency_pct for p in pts],
             "LCOH (€/kg)":[p.lcoh_eur_kg for p in pts],
         })
+
         fc_fig = go.Figure()
-        fc_fig.add_trace(go.Scatter(x=odf["Power (kW)"],y=odf["η (%)"],
-            line=dict(color=C["elec"],width=2),name="η (%)",yaxis="y"))
-        fc_fig.add_trace(go.Scatter(x=odf["Power (kW)"],y=odf["LCOH (€/kg)"],
-            line=dict(color=C["h2"],width=2,dash="dash"),name="LCOH €/kg",yaxis="y2"))
-        fc_fig.add_vline(x=bl.elec_power_kw,line_dash="dot",line_color=C["bess"],
-            annotation_text="Best LCOH",annotation_font_color=C["bess"])
-        fc_fig.add_vline(x=bp.elec_power_kw,line_dash="dot",line_color=C["solar"],
-            annotation_text="Best profit",annotation_font_color=C["solar"])
-        fc_fig.update_layout(**mk(height=280,
-            yaxis=dict(title="Efficiency (%)",color=C["elec"]),
-            yaxis2=dict(title="LCOH (€/kg)",overlaying="y",side="right",color=C["h2"])))
+
+        fc_fig.add_trace(go.Scatter(
+            x=odf["Power (kW)"],
+            y=odf["η (%)"],
+            line=dict(color=C["elec"], width=2),
+            name="η (%)",
+            yaxis="y"
+        ))
+
+        fc_fig.add_trace(go.Scatter(
+            x=odf["Power (kW)"],
+            y=odf["LCOH (€/kg)"],
+            line=dict(color=C["h2"], width=2, dash="dash"),
+            name="LCOH €/kg",
+            yaxis="y2"
+        ))
+
+        fc_fig.add_vline(
+            x=bl.elec_power_kw,
+            line_dash="dot",
+            line_color=C["bess"],
+            annotation_text="Best LCOH",
+            annotation_font_color=C["bess"]
+        )
+
+        fc_fig.add_vline(
+            x=bp.elec_power_kw,
+            line_dash="dot",
+            line_color=C["solar"],
+            annotation_text="Best profit",
+            annotation_font_color=C["solar"]
+        )
+
+        fc_fig.update_layout(**mk(
+            height=280,
+            yaxis=dict(title="Efficiency (%)", color=C["elec"]),
+            yaxis2=dict(title="LCOH (€/kg)", overlaying="y", side="right", color=C["h2"])
+        ))
+
         st.plotly_chart(fc_fig, use_container_width=True)
 
         st.markdown('<p class="sec-hdr">Sensitivity analysis</p>', unsafe_allow_html=True)
+
         sens = st.session_state.optimizer.annual_sensitivity(
-            h2_prices=[4.0,5.0,6.0,7.0,8.0], pv_scales=[1.0,1.5,2.0])
+            h2_prices=[4.0, 5.0, 6.0, 7.0, 8.0],
+            pv_scales=[1.0, 1.5, 2.0]
+        )
+
         sdf = pd.DataFrame(sens)
-        sdf.columns = ["PV scale","H₂ price €/kg","Best LCOH €/kg",
-                       "Annual H₂ kg","Net profit €","Profitable"]
-        sdf["Profitable"]   = sdf["Profitable"].map({True:"✅",False:"❌"})
+        sdf.columns = [
+            "PV scale", "H₂ price €/kg", "Best LCOH €/kg",
+            "Annual H₂ kg", "Net profit €", "Profitable"
+        ]
+
+        sdf["Profitable"] = sdf["Profitable"].map({True: "✅", False: "❌"})
         sdf["Net profit €"] = sdf["Net profit €"].apply(lambda x: f"€{x:,.0f}")
         sdf["Annual H₂ kg"] = sdf["Annual H₂ kg"].apply(lambda x: f"{x:.0f}")
+
         st.dataframe(sdf, use_container_width=True, hide_index=True)
+
     else:
         st.info("Click **🔍 Find Optimal Operating Point** to run the analysis.")
 
