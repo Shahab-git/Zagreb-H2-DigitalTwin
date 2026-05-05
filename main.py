@@ -394,7 +394,7 @@ with tabs[0]:
             f3.update_layout(**mk(
                 height=220,
                 yaxis=dict(
-                    title="W/m²"
+                    title="W/m²",
                     title_font=dict(color="#111827"),
                     tickfont=dict(color="#111827")
     )
