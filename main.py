@@ -830,4 +830,3 @@ try:
     st_autorefresh(interval=refresh*1000, key="lumi_v41_r")
 except ImportError:
     import time; time.sleep(refresh); st.rerun()
-ENDOFFILE
