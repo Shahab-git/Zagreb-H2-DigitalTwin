@@ -840,7 +840,7 @@ with tabs[6]:
             "LCOH (€/kg)": [p.lcoh_eur_kg for p in pts],
 })
 
-fc_fig = go.Figure()
+        fc_fig = go.Figure()
 
         # Efficiency Trace - سبز تیره زمردی
         fc_fig.add_trace(go.Scatter(
