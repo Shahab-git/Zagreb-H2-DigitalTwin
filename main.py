@@ -847,7 +847,7 @@ with tabs[6]:
             "Power (kW)":  [p.elec_power_kw  for p in pts],
             "η (%)":       [p.efficiency_pct for p in pts],
             "LCOH (€/kg)": [p.lcoh_eur_kg    for p in pts],
-})
+        })
 
         fc_fig = go.Figure()
         fc_fig.add_trace(go.Scatter(
@@ -856,15 +856,14 @@ with tabs[6]:
             line=dict(color="#064e3b", width=2.5),
             name="Efficiency (%)",
             yaxis="y",
-))
+        ))
         fc_fig.add_trace(go.Scatter(
             x=odf["Power (kW)"],
             y=odf["LCOH (€/kg)"],
             line=dict(color="#1e3a8a", width=2.5, dash="dash"),
             name="LCOH (€/kg)",
             yaxis="y2",
-))
-
+        ))
         fc_fig.update_layout(
             height=300,
             plot_bgcolor="white",
@@ -876,14 +875,14 @@ with tabs[6]:
                 tickfont=dict(color="black"),
                 linecolor="black",
                 gridcolor="#f0f0f0",
-    ),
+            ),
             yaxis=dict(
                 title="<b>Efficiency (%)</b>",
                 titlefont=dict(color="#064e3b", size=12),
                 tickfont=dict(color="#064e3b"),
                 gridcolor="#f0f0f0",
                 zeroline=False,
-    ),
+            ),
             yaxis2=dict(
                 title="<b>LCOH (€/kg)</b>",
                 titlefont=dict(color="#1e3a8a", size=12),
@@ -892,7 +891,7 @@ with tabs[6]:
                 side="right",
                 showgrid=False,
                 zeroline=False,
-    ),
+            ),
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
@@ -900,26 +899,23 @@ with tabs[6]:
                 xanchor="right",
                 x=1,
                 font=dict(color="black", size=10),
-    ),
-)
+            ),
+        )
+        # theme=None preserves custom dark colours instead of Streamlit's default theme
+        st.plotly_chart(fc_fig, use_container_width=True, theme=None)
 
-# theme=None preserves custom dark colours instead of Streamlit's default theme
-            st.plotly_chart(fc_fig, use_container_width=True, theme=None)
-
-        # ── Sensitivity Analysis Table ──────────────────────────────────────────
         st.markdown('<p class="sec-hdr">Sensitivity analysis</p>', unsafe_allow_html=True)
         sens = st.session_state.optimizer.annual_sensitivity(
             h2_prices=[4.0, 5.0, 6.0, 7.0, 8.0], pv_scales=[1.0, 1.5, 2.0])
-        
+
         sdf = pd.DataFrame(sens)
         sdf.columns = ["PV scale", "H₂ price €/kg", "Best LCOH €/kg",
                        "Annual H₂ kg", "Net profit €", "Profitable"]
-        
-        # فرمت‌دهی ظاهری جدول
-        sdf["Profitable"] = sdf["Profitable"].map({True: "✅", False: "❌"})
+
+        sdf["Profitable"]   = sdf["Profitable"].map({True: "✅", False: "❌"})
         sdf["Net profit €"] = sdf["Net profit €"].apply(lambda x: f"€{x:,.0f}")
         sdf["Annual H₂ kg"] = sdf["Annual H₂ kg"].apply(lambda x: f"{x:.0f}")
-        
+
         st.dataframe(sdf, use_container_width=True, hide_index=True)
     else:
         st.info("Click **🔍 Find Optimal Operating Point** to run the analysis.")
