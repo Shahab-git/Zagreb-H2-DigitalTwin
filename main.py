@@ -416,7 +416,14 @@ with tabs[1]:
                     f5.add_trace(go.Scatter(x=hist["time"],y=hist[col],
                         stackgroup="one",name=name,
                         line=dict(color=color,width=1),fillcolor=fill))
-            f5.update_layout(**mk(height=240,yaxis_title="kW"))
+            f5.update_layout(**mk(
+                height=240,
+                yaxis=dict(
+                    title="kW",
+                    title_font=dict(color="#111827"),
+        tickfont=dict(color="#111827")
+    )
+))
             st.plotly_chart(f5, use_container_width=True)
 
         st.markdown('<p class="sec-hdr">Stack SoH</p>', unsafe_allow_html=True)
