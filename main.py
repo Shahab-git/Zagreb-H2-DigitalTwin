@@ -527,7 +527,15 @@ with tabs[2]:
             marker_color=[C["h2"],C["elec"],C["bess"]],marker_line_width=0,
             text=[f"{v:.1f}%" for v in [s.buffer_pct,s.main_tank_pct,s.hrs_pct]],
             textposition="outside",textfont=dict(color="#111827")))
-        f11.update_layout(**mk(height=230,yaxis_range=[0,115],yaxis_title="%"))
+        f11.update_layout(**mk(
+    height=230,
+    yaxis=dict(
+        range=[0, 115],
+        title="%",
+        title_font=dict(color="#111827"),
+        tickfont=dict(color="#111827")
+    )
+))
         st.plotly_chart(f11, use_container_width=True)
 
         f12 = go.Figure(go.Indicator(
