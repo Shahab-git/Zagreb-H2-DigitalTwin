@@ -166,7 +166,7 @@ class EconomicOptimizer:
             best_lcoh_point=best_lcoh,
             best_profit_point=best_profit,
             all_points=points,
-            recommendation=f"بار پیشنهادی: {rec_point.elec_power_kw:.2f} kW",
+            recommendation=f"Recommended load: {rec_point.elec_power_kw:.2f} kW",
             reason=reason,
         )
 
