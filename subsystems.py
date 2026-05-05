@@ -1,6 +1,6 @@
 # =============================================================================
-# subsystems.py — LUMINIH2 زیرسیستم‌های تکمیلی
-# تصفیه آب · مدیریت O₂ · خشک‌کن H₂ · Warm-up الکترولایزر
+# subsystems.py — LUMINIH2
+# Water purification · O₂ management · H₂ dryer · Electrolyzer warm-up
 # Version: 4.0
 # =============================================================================
 
@@ -20,14 +20,14 @@ logger = logging.getLogger("Subsystems")
 @dataclass
 class WaterResult:
     """نتیجه سیستم تصفیه آب"""
-    raw_water_l_h:        float   # آب خام ورودی
-    purified_l_h:         float   # آب تصفیه‌شده خروجی
-    conductivity_us_cm:   float   # هدایت الکتریکی (باید < 0.1)
-    resistance_mohm_cm:   float   # مقاومت (باید > 10)
-    quality_ok:           bool    # True = کیفیت قابل قبول
-    resin_saturation_pct: float   # درصد اشباع رزین (> 80% = تعویض)
+    raw_water_l_h:        float   # Raw feed water
+    purified_l_h:         float   # Treated water output
+    conductivity_us_cm:   float   # Electrical conductivity (should be < 0.1)
+    resistance_mohm_cm:   float   # Resistance (should be > 10)
+    quality_ok:           bool    # True = acceptable quality
+    resin_saturation_pct: float   # Resin saturation (%) (> 80% = replace)
     resin_warning:        bool
-    power_kw:             float   # مصرف پمپ و UV
+    power_kw:             float   # Pump and UV consumption
 
 
 @dataclass
