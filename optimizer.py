@@ -222,7 +222,7 @@ if __name__ == "__main__":
         source="renewable",
         h2_price_eur_kg=6.0,
     )
-    print("📊 با برق تجدیدپذیر (10 kW موجود):")
+    print("📊 With renewable power (10 kW available):")
     print(f"   بهترین LCOH   : €{r1.best_lcoh_point.lcoh_eur_kg:.3f}/kg "
           f"در {r1.best_lcoh_point.elec_power_kw:.2f} kW")
     print(f"   بهترین سود    : €{r1.best_profit_point.net_profit_eur:,.0f}/سال "
