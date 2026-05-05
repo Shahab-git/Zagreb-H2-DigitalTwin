@@ -362,7 +362,14 @@ with tabs[0]:
             f2.add_trace(go.Scatter(x=hist["time"], y=hist["wx_irradiance"],
                 fill="tozeroy", fillcolor="rgba(245,158,11,.12)",
                 line=dict(color=C["solar"],width=2), name="W/m²"))
-            f2.update_layout(**mk(height=170, yaxis_title="W/m²"))
+            f2.update_layout(**mk(
+                height=170, 
+                yaxis=dict(
+                    title="W/m²",
+                    title_font=dict(color="#111827"),
+                    tickfont=dict(color="#111827")
+    )
+))
             st.plotly_chart(f2, use_container_width=True)
 
     with c2:
