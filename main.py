@@ -25,62 +25,7 @@ from gtts import gTTS
 import tempfile
 import base64
 
-def build_welcome_text(s, alrt, wx_src):
-    now = datetime.now(timezone(timedelta(hours=2)))
 
-    text = f"""
-Welcome to LUMINIH2 Digital Twin.
-Time: {now.strftime('%H:%M:%S')}
-
-Generation: {getattr(s, 'total_gen_kw', 0):.1f} kW
-Battery: {getattr(s, 'bess_soc_pct', 0):.0f} %
-Hydrogen: {getattr(s, 'h2_kg_h', 0)*1000:.1f} g/h
-LCOH: {getattr(s, 'lcoh', 0):.2f} €/kg
-"""
-
-    errors = len(alrt.errors()) if alrt else 0
-    warnings = len(alrt.warnings()) if alrt else 0
-
-    text += f"\nErrors: {errors}, Warnings: {warnings}"
-
-    return text
-
-
-def speak_text(text):
-    tts = gTTS(text=text, lang="en")
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
-        tts.save(fp.name)
-        audio = open(fp.name, "rb").read()
-
-    b64 = base64.b64encode(audio).decode()
-
-    st.markdown(f"""
-    <audio controls autoplay>
-        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-    </audio>
-    """, unsafe_allow_html=True)
-
-
-# =========================
-# 🔥 UI MAIN
-# =========================
-
-def render_welcome(s, alrt, wx_src):
-
-    st.title("LUMINIH2 Digital Twin")
-
-    st.write("🔊 Click button to test system voice")
-
-    if st.button("▶ Run Welcome Voice"):
-
-        st.info("Generating system status...")
-
-        text = build_welcome_text(s, alrt, wx_src)
-
-        st.text(text)   # 👈 مهم: برای اینکه ببینی خروجی ساخته شده
-
-        speak_text(text)
 
 # =============================================================================
 
@@ -1056,3 +1001,60 @@ try:
     st_autorefresh(interval=refresh*1000, key="lumi_v41_r")
 except ImportError:
     import time; time.sleep(refresh); st.rerun()
+
+def build_welcome_text(s, alrt, wx_src):
+    now = datetime.now(timezone(timedelta(hours=2)))
+
+    text = f"""
+Welcome to LUMINIH2 Digital Twin.
+Time: {now.strftime('%H:%M:%S')}
+
+Generation: {getattr(s, 'total_gen_kw', 0):.1f} kW
+Battery: {getattr(s, 'bess_soc_pct', 0):.0f} %
+Hydrogen: {getattr(s, 'h2_kg_h', 0)*1000:.1f} g/h
+LCOH: {getattr(s, 'lcoh', 0):.2f} €/kg
+"""
+
+    errors = len(alrt.errors()) if alrt else 0
+    warnings = len(alrt.warnings()) if alrt else 0
+
+    text += f"\nErrors: {errors}, Warnings: {warnings}"
+
+    return text
+
+
+def speak_text(text):
+    tts = gTTS(text=text, lang="en")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
+        tts.save(fp.name)
+        audio = open(fp.name, "rb").read()
+
+    b64 = base64.b64encode(audio).decode()
+
+    st.markdown(f"""
+    <audio controls autoplay>
+        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+    </audio>
+    """, unsafe_allow_html=True)
+
+
+# =========================
+# 🔥 UI MAIN
+# =========================
+
+def render_welcome(s, alrt, wx_src):
+
+    st.title("LUMINIH2 Digital Twin")
+
+    st.write("🔊 Click button to test system voice")
+
+    if st.button("▶ Run Welcome Voice"):
+
+        st.info("Generating system status...")
+
+        text = build_welcome_text(s, alrt, wx_src)
+
+        st.text(text)   # 👈 مهم: برای اینکه ببینی خروجی ساخته شده
+
+        speak_text(text)
