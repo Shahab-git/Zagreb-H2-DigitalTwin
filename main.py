@@ -441,8 +441,8 @@ with tabs[1]:
                 marker_color=C["h2"],marker_line_width=0,name="g/h"))
             f7.update_layout(**mk(
     height=200,
-    yaxis_title="g H₂/h",
     yaxis=dict(
+        title="g H₂/h",
         title_font=dict(color="#111827"),
         tickfont=dict(color="#111827")
     )
