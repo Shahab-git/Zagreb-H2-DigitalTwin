@@ -391,7 +391,14 @@ with tabs[0]:
             f3.add_trace(go.Scatter(x=fdf["h"],y=fdf["v"],
                 line=dict(color=C["h2"],width=2),mode="lines+markers",
                 marker=dict(size=5),name="Forecast W/m²"))
-            f3.update_layout(**mk(height=220,yaxis_title="W/m²"))
+            f3.update_layout(**mk(
+                height=220,
+                yaxis=dict(
+                    title="W/m²"
+                    title_font=dict(color="#111827"),
+                    tickfont=dict(color="#111827")
+    )
+))
             st.plotly_chart(f3, use_container_width=True)
         else:
             st.info("Accumulating data for AI training…")
