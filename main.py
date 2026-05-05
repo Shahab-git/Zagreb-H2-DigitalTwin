@@ -21,30 +21,89 @@ from scenario_engine import ScenarioEngine, ScenarioParams
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
 
+from gtts import gTTS
+import tempfile
+import base64
+
+# =============================================================================
+# 1. TEXT GENERATOR
+# =============================================================================
 def build_welcome_text(s, alrt, wx_src):
     now = datetime.now(timezone(timedelta(hours=2)))
     hour = now.hour
-    greet = "Good morning" if hour < 12 else ("Good afternoon" if hour < 17 else "Good evening")
+
+    greet = (
+        "Good morning" if hour < 12 else
+        "Good afternoon" if hour < 17 else
+        "Good evening"
+    )
+
     day   = now.strftime("%A")
     date  = now.strftime("%B %d, %Y")
     time_ = now.strftime("%H:%M")
-    
+
     text  = f"{greet}. Welcome to LUMINIH2 Digital Twin. "
     text += f"Today is {day}, {date}. Time in Zagreb: {time_}. "
     text += f"Generation: {s.total_gen_kw:.1f} kilowatts. "
     text += f"Battery at {s.bess_soc_pct:.0f} percent. "
     text += f"Hydrogen rate: {s.h2_kg_h*1000:.1f} grams per hour. "
     text += f"LCOH: {s.lcoh:.2f} euros per kilogram. "
-    
+
     if alrt.errors():
         text += f"{len(alrt.errors())} critical alert. Immediate attention required. "
     elif alrt.warnings():
         text += f"{len(alrt.warnings())} warning active. "
     else:
         text += "All systems nominal. "
-    
+
     text += "Have a productive session."
     return text
+
+
+# =============================================================================
+# 2. TEXT TO SPEECH ENGINE
+# =============================================================================
+def speak_text(text, lang="en"):
+    tts = gTTS(text=text, lang=lang)
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
+        tts.save(fp.name)
+        audio_bytes = open(fp.name, "rb").read()
+
+    b64 = base64.b64encode(audio_bytes).decode()
+
+    audio_html = f"""
+    <audio autoplay controls style="width: 100%;">
+        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+    </audio>
+    """
+
+    st.markdown(audio_html, unsafe_allow_html=True)
+
+
+# =============================================================================
+# 3. STREAMLIT UI
+# =============================================================================
+def render_welcome_panel(s, alrt, wx_src):
+
+    st.title("🧠 LUMINIH2 Digital Twin")
+
+    st.write("Click below to hear system status:")
+
+    if st.button("🔊 Speak System Status"):
+        text = build_welcome_text(s, alrt, wx_src)
+
+        # show text
+        st.info(text)
+
+        # speak text
+        speak_text(text)
+
+
+# =============================================================================
+# 4. USAGE (inside your main app)
+# =============================================================================
+# render_welcome_panel(system_state, alerts, weather_source)
 
 st.set_page_config(
     page_title="LUMINIH2 Digital Twin",
