@@ -593,29 +593,28 @@ with tabs[3]:
     line=dict(color=C["ev"], width=2),
     name="EV load"
 ))
-
-f15.update_layout(**mk(
-    height=210,
-    xaxis=dict(
-        title="Time",
-        title_font=dict(color="#111827"),
-        tickfont=dict(color="#111827")
-    ),
-    yaxis=dict(
-        title="Power (kW)",
-        title_font=dict(color="#111827"),
-        tickfont=dict(color="#111827")
-    )
-))
-st.plotly_chart(f15, use_container_width=True)
+        f15.update_layout(**mk(
+            height=210,
+            xaxis=dict(
+                title="Time",
+                title_font=dict(color="#111827"),
+                tickfont=dict(color="#111827")
+            ),
+            yaxis=dict(
+                title="Power (kW)",
+                title_font=dict(color="#111827"),
+                tickfont=dict(color="#111827")
+            )
+        ))
+        st.plotly_chart(f15, use_container_width=True)
         f16.update_layout(**mk(
-    height=210,
-    legend=dict(
-        orientation="h",
-        y=-0.15,
-        font=dict(size=11, color="#111827")
-    )
-))
+            height=210,
+            legend=dict(
+                orientation="h",
+                y=-0.15,
+                font=dict(size=11, color="#111827")
+            )
+        ))
 
 st.plotly_chart(f16, use_container_width=True)
 
