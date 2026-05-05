@@ -784,12 +784,23 @@ with tabs[6]:
     with oc1:
         opt_power = st.slider("Available renewable power (kW)", 0.0, 15.0, float(s.total_gen_kw), 0.1)
         opt_h2_price = st.slider("H₂ sell price (€/kg)", 3.0, 12.0, sc_h2_price, 0.5)
-        # اعمال تغییر در لیبل و گزینه‌ها برای تیره شدن (Bold)
-        opt_source = st.radio("**Energy source**", ["**renewable**", "**grid**"], horizontal=True)
+        
+        # تغییر رنگ به مشکی خالص با استفاده از HTML
+        opt_source = st.radio(
+            '<span style="color: black; font-weight: bold;">Energy source</span>',
+            [
+                '<span style="color: black;">renewable</span>', 
+                '<span style="color: black;">grid</span>'
+            ],
+            horizontal=True,
+            unsafe_allow_html=True
+        )
 
     if st.button("🔍 Find Optimal Operating Point"):
-        # حذف ستاره‌ها در هنگام پردازش مقدار انتخابی با .replace
-        clean_source = opt_source.replace("**", "")
+        # پاک‌سازی تگ‌های HTML برای ارسال مقدار خام به بهینه‌ساز
+        import re
+        clean_source = re.sub('<[^<]+?>', '', opt_source)
+        
         opt_res = st.session_state.optimizer.find_optimal_operating_point(
             available_power_kw=opt_power,
             grid_price_eur_kwh=Config.GRID_PRICE_BUY,
