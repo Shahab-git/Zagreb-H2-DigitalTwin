@@ -713,7 +713,14 @@ with tabs[5]:
             f_m = go.Figure()
             f_m.add_trace(go.Bar(x=mdf["month"],y=mdf["h2"],
                 marker_color=C["h2"],marker_line_width=0,name="H₂ kg"))
-            f_m.update_layout(**mk(height=220,yaxis_title="kg H₂"))
+            f_m.update_layout(**mk(
+                height=220,
+                yaxis=dict(
+                    title="kg H₂",
+                    title_font=dict(color="#111827"),
+                    tickfont=dict(color="#111827")
+    )
+))
             st.plotly_chart(f_m, use_container_width=True)
 
         with c2:
