@@ -778,165 +778,78 @@ with tabs[5]:
         st.info("Click **▶ Run Annual Simulation** to generate the 365-day report.")
 # ── TAB 7: OPTIMIZER ──────────────────────────────────────────────────────────
 with tabs[6]:
-    st.markdown(
-        '<p class="sec-hdr">Economic operating point optimiser — ITM S30/30</p>',
-        unsafe_allow_html=True
-    )
-
+    st.markdown('<p class="sec-hdr">Economic operating point optimiser — ITM S30/30</p>',
+                unsafe_allow_html=True)
     oc1, oc2 = st.columns(2)
-
     with oc1:
-        opt_power = st.slider(
-            "Available renewable power (kW)",
-            0.0, 15.0, float(s.total_gen_kw), 0.1
-        )
+        opt_power = st.slider("Available renewable power (kW)", 0.0, 15.0, float(s.total_gen_kw), 0.1)
+        opt_h2_price = st.slider("H₂ sell price (€/kg)", 3.0, 12.0, sc_h2_price, 0.5)
+        # اعمال تغییر در لیبل و گزینه‌ها برای تیره شدن (Bold)
+        opt_source = st.radio("**Energy source**", ["**renewable**", "**grid**"], horizontal=True)
 
-        opt_h2_price = st.slider(
-            "H₂ sell price (€/kg)",
-            3.0, 12.0, sc_h2_price, 0.5
-        )
-
-        # ── ONLY CLEAN ENERGY SOURCE SECTION (VISIBLE + SIMPLE)
-        st.markdown(
-            '<p style="font-size:14px;font-weight:800;color:#111827;margin:8px 0 6px">'
-            'Energy source</p>',
-            unsafe_allow_html=True
-        )
-
-        opt_source = st.radio(
-            label="",
-            options=["renewable", "grid"],
-            horizontal=True
-        )
-
-        # ── VISUAL FIX (ONLY EMPHASIZE TEXT, NO COMPLEX CSS)
-        st.markdown("""
-        <style>
-        div.row-widget.stRadio label {
-            font-size: 14px !important;
-            font-weight: 700 !important;
-            padding: 6px 12px !important;
-            border-radius: 8px !important;
-            border: 1px solid #e2e8f0 !important;
-            color: #111827 !important;
-            background: #ffffff !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-    # ── RUN OPTIMIZER
     if st.button("🔍 Find Optimal Operating Point"):
+        # حذف ستاره‌ها در هنگام پردازش مقدار انتخابی با .replace
+        clean_source = opt_source.replace("**", "")
         opt_res = st.session_state.optimizer.find_optimal_operating_point(
             available_power_kw=opt_power,
             grid_price_eur_kwh=Config.GRID_PRICE_BUY,
             h2_price_eur_kg=opt_h2_price,
-            source=opt_source
-        )
+            source=clean_source)
         st.session_state.opt_result = opt_res
 
     opt_res = st.session_state.opt_result
-
-    # ── RESULTS
     if opt_res and opt_res.all_points:
-        bl = opt_res.best_lcoh_point
+        bl = opt_res.best_lcoh_point;
         bp = opt_res.best_profit_point
-
         oc = st.columns(2)
-
         with oc[0]:
-            st.markdown(
-                '<p class="sec-hdr">Best LCOH point</p>',
-                unsafe_allow_html=True
-            )
-
-            kpi(
-                st,
-                "Load",
-                f"{bl.elec_power_kw:.2f} kW",
-                f"H₂ {bl.h2_rate_kg_h * 1000:.1f} g/h · η {bl.efficiency_pct:.1f}%",
-                "kpi-cyan"
-            )
-
-            st.metric(
-                "LCOH",
-                f"€{bl.lcoh_eur_kg:.3f}/kg",
-                delta=f"vs target €{Config.LCOH_TARGET_EURO_KG}"
-            )
-
-            st.metric(
-                "Annual net profit",
-                f"€{bl.net_profit_eur:,.0f}"
-            )
-
+            st.markdown('<p class="sec-hdr">Best LCOH point</p>', unsafe_allow_html=True)
+            kpi(st, "Load", f"{bl.elec_power_kw:.2f} kW",
+                f"H₂ {bl.h2_rate_kg_h * 1000:.1f} g/h · η {bl.efficiency_pct:.1f}%", "kpi-cyan")
+            st.metric("LCOH", f"€{bl.lcoh_eur_kg:.3f}/kg",
+                      delta=f"vs target €{Config.LCOH_TARGET_EURO_KG}")
+            st.metric("Annual net profit", f"€{bl.net_profit_eur:,.0f}")
         with oc[1]:
-            st.markdown(
-                '<p class="sec-hdr">Best profit point</p>',
-                unsafe_allow_html=True
-            )
+            st.markdown('<p class="sec-hdr">Best profit point</p>', unsafe_allow_html=True)
+            kpi(st, "Load", f"{bp.elec_power_kw:.2f} kW",
+                f"H₂ {bp.h2_rate_kg_h * 1000:.1f} g/h · η {bp.efficiency_pct:.1f}%", "kpi-green")
+            st.metric("LCOH", f"€{bp.lcoh_eur_kg:.3f}/kg")
+            st.metric("Annual net profit", f"€{bp.net_profit_eur:,.0f}")
 
-            kpi(
-                st,
-                "Load",
-                f"{bp.elec_power_kw:.2f} kW",
-                f"H₂ {bp.h2_rate_kg_h * 1000:.1f} g/h · η {bp.efficiency_pct:.1f}%",
-                "kpi-green"
-            )
+        st.markdown(f'<div class="alert-info">💡 {opt_res.recommendation}<br>{opt_res.reason}</div>',
+                    unsafe_allow_html=True)
 
-            st.metric(
-                "LCOH",
-                f"€{bp.lcoh_eur_kg:.3f}/kg"
-            )
-
-            st.metric(
-                "Annual net profit",
-                f"€{bp.net_profit_eur:,.0f}"
-            )
-
-        st.markdown(
-            f'<div class="alert-info">💡 {opt_res.recommendation}<br>{opt_res.reason}</div>',
-            unsafe_allow_html=True
-        )
-
-        # ── CURVE
-        st.markdown(
-            '<p class="sec-hdr">S30/30 operating curve</p>',
-            unsafe_allow_html=True
-        )
-
+        st.markdown('<p class="sec-hdr">S30/30 operating curve</p>', unsafe_allow_html=True)
         pts = opt_res.all_points
-
         odf = pd.DataFrame({
             "Power (kW)": [p.elec_power_kw for p in pts],
             "η (%)": [p.efficiency_pct for p in pts],
             "LCOH (€/kg)": [p.lcoh_eur_kg for p in pts],
         })
-
         fc_fig = go.Figure()
-
-        fc_fig.add_trace(go.Scatter(
-            x=odf["Power (kW)"],
-            y=odf["η (%)"],
-            line=dict(color=C["elec"], width=2),
-            name="Efficiency (%)",
-            yaxis="y"
-        ))
-
-        fc_fig.add_trace(go.Scatter(
-            x=odf["Power (kW)"],
-            y=odf["LCOH (€/kg)"],
-            line=dict(color=C["h2"], width=2, dash="dash"),
-            name="LCOH (€/kg)",
-            yaxis="y2"
-        ))
-
-        fc_fig.update_layout(**mk(
-            height=280,
-            yaxis=dict(title="Efficiency (%)", color=C["elec"]),
-            yaxis2=dict(title="LCOH (€/kg)", overlaying="y", side="right", color=C["h2"])
-        ))
-
+        fc_fig.add_trace(go.Scatter(x=odf["Power (kW)"], y=odf["η (%)"],
+                                    line=dict(color=C["elec"], width=2), name="η (%)", yaxis="y"))
+        fc_fig.add_trace(go.Scatter(x=odf["Power (kW)"], y=odf["LCOH (€/kg)"],
+                                    line=dict(color=C["h2"], width=2, dash="dash"), name="LCOH €/kg", yaxis="y2"))
+        fc_fig.add_vline(x=bl.elec_power_kw, line_dash="dot", line_color=C["bess"],
+                         annotation_text="Best LCOH", annotation_font_color=C["bess"])
+        fc_fig.add_vline(x=bp.elec_power_kw, line_dash="dot", line_color=C["solar"],
+                         annotation_text="Best profit", annotation_font_color=C["solar"])
+        fc_fig.update_layout(**mk(height=280,
+                                  yaxis=dict(title="Efficiency (%)", color=C["elec"]),
+                                  yaxis2=dict(title="LCOH (€/kg)", overlaying="y", side="right", color=C["h2"])))
         st.plotly_chart(fc_fig, use_container_width=True)
 
+        st.markdown('<p class="sec-hdr">Sensitivity analysis</p>', unsafe_allow_html=True)
+        sens = st.session_state.optimizer.annual_sensitivity(
+            h2_prices=[4.0, 5.0, 6.0, 7.0, 8.0], pv_scales=[1.0, 1.5, 2.0])
+        sdf = pd.DataFrame(sens)
+        sdf.columns = ["PV scale", "H₂ price €/kg", "Best LCOH €/kg",
+                       "Annual H₂ kg", "Net profit €", "Profitable"]
+        sdf["Profitable"] = sdf["Profitable"].map({True: "✅", False: "❌"})
+        sdf["Net profit €"] = sdf["Net profit €"].apply(lambda x: f"€{x:,.0f}")
+        sdf["Annual H₂ kg"] = sdf["Annual H₂ kg"].apply(lambda x: f"{x:.0f}")
+        st.dataframe(sdf, use_container_width=True, hide_index=True)
     else:
         st.info("Click **🔍 Find Optimal Operating Point** to run the analysis.")
 # ── TAB 8: SAFETY ─────────────────────────────────────────────────────────────
