@@ -580,43 +580,43 @@ with tabs[3]:
 
     with c2:
         if hd("grid_export_kw"):
-    st.markdown('<p class="sec-hdr">Grid export vs EV load</p>', unsafe_allow_html=True)
-
-    f15 = go.Figure()
-
-    f15.add_trace(go.Scatter(
-        x=hist["time"],
-        y=hist["grid_export_kw"],
-        fill="tozeroy",
-        fillcolor="rgba(148,163,184,.2)",
-        line=dict(color=C["grid"], width=2),
-        name="Grid export"
-    ))
-
-    f15.add_trace(go.Scatter(
-        x=hist["time"],
-        y=hist["ev_kw"],
-        fill="tozeroy",
-        fillcolor="rgba(96,165,250,.2)",
-        line=dict(color=C["ev"], width=2),
-        name="EV load"
-    ))
-
-    f15.update_layout(**mk(
-        height=210,
-        xaxis=dict(
-            title="Time",
-            title_font=dict(color="#111827"),
-            tickfont=dict(color="#111827")
-        ),
-        yaxis=dict(
-            title="Power (kW)",
-            title_font=dict(color="#111827"),
-            tickfont=dict(color="#111827")
-        )
-    ))
-
-    st.plotly_chart(f15, use_container_width=True)
+            f15.add_trace(go.Scatter(x=hist["time"], y=hist["grid_export_kw"],
+            fill="tozeroy", fillcolor="rgba(148,163,184,.2)",
+            line=dict(color=C["grid"], width=2), name="Grid export"))
+            
+            f15.add_trace(go.Scatter(
+                x=hist["time"],
+                y=hist["ev_kw"],
+                fill="tozeroy",
+                fillcolor="rgba(96,165,250,.2)",
+                line=dict(color=C["ev"], width=2),
+                name="EV load"
+            ))
+            
+            f15.update_layout(**mk(
+                height=210,
+                xaxis=dict(
+                    title="Time",
+                    title_font=dict(color="#111827"),
+                    tickfont=dict(color="#111827")
+                ),
+                yaxis=dict(
+                    title="Power (kW)",
+                    title_font=dict(color="#111827"),
+                    tickfont=dict(color="#111827")
+                )
+            ))
+            st.plotly_chart(f15, use_container_width=True)
+            
+            f16.update_layout(**mk(
+                height=210,
+                legend=dict(
+                    orientation="h",
+                    y=-0.15,
+                    font=dict(size=11, color="#111827")
+                )
+            ))
+            st.plotly_chart(f15, use_container_width=True)      
 
 # ── TAB 5: SUBSYSTEMS ─────────────────────────────────────────────────────────
 with tabs[4]:
