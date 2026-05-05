@@ -734,10 +734,10 @@ with tabs[5]:
                 height=220,
                 barmode="stack",
                 yaxis=dict(
-                    title="kWh"
+                    title="kWh",
                     title_font=dict(color="#111827"),
                     tickfont=dict(color="#111827")
-    )
+)
 ))
             st.plotly_chart(f_g, use_container_width=True)
 
