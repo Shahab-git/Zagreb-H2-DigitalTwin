@@ -730,7 +730,15 @@ with tabs[5]:
                 name="Solar kWh",marker_color=C["solar"],marker_line_width=0))
             f_g.add_trace(go.Bar(x=mdf["month"],y=mdf["wind"],
                 name="Wind kWh",marker_color=C["wind"],marker_line_width=0))
-            f_g.update_layout(**mk(height=220,barmode="stack",yaxis_title="kWh"))
+            f_g.update_layout(**mk(
+                height=220,
+                barmode="stack",
+                yaxis=dict(
+                    title="kWh"
+                    title_font=dict(color="#111827"),
+                    tickfont=dict(color="#111827")
+    )
+))
             st.plotly_chart(f_g, use_container_width=True)
 
         st.markdown('<p class="sec-hdr">Scenario comparison</p>', unsafe_allow_html=True)
