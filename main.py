@@ -860,29 +860,32 @@ with tabs[6]:
             yaxis="y2"
         ))
 
-        # تنظیمات چیدمان اصلاح شده
-        fc_fig.update_layout(**mk(
-            height=300,
-            xaxis=dict(
-                title="<b>Power (kW)</b>", # استفاده از تگ HTML برای ضخیم کردن
+        # استفاده از تنظیمات مستقیم برای جلوگیری از خطای تابع mk
+        layout_args = {
+            "height": 300,
+            "xaxis": dict(
+                title="<b>Power (kW)</b>",
                 titlefont=dict(color="black", size=13),
-                tickfont=dict(color="black")
+                tickfont=dict(color="black"),
+                linecolor="black"
             ),
-            yaxis=dict(
+            "yaxis": dict(
                 title="<b>Efficiency (%)</b>",
                 titlefont=dict(color="#064e3b", size=13),
                 tickfont=dict(color="#064e3b"),
-                gridcolor="#f0f0f0"
+                gridcolor="#f0f0f0",
+                zeroline=False
             ),
-            yaxis2=dict(
+            "yaxis2": dict(
                 title="<b>LCOH (€/kg)</b>",
                 titlefont=dict(color="#1e3a8a", size=13),
                 tickfont=dict(color="#1e3a8a"),
                 overlaying="y",
                 side="right",
-                showgrid=False
-            ),          
-            legend=dict(
+                showgrid=False,
+                zeroline=False
+            ),
+            "legend": dict(
                 orientation="h",
                 yanchor="bottom",
                 y=1.02,
@@ -890,11 +893,17 @@ with tabs[6]:
                 x=1,
                 font=dict(color="black")
             ),
-            margin=dict(l=40, r=40, t=40, b=40),
-            plot_bgcolor="white"
-        ))
+            "margin": dict(l=50, r=50, t=50, b=50),
+            "plot_bgcolor": "white",
+            "paper_bgcolor": "white"
+        }
 
-        st.plotly_chart(fc_fig, use_container_width=True)
+        # اگر تابع mk شما کارهای دیگری انجام می‌دهد، آن را با دیکشنری بالا ترکیب کنید
+        # در غیر این صورت مستقیماً آپدیت کنید:
+        fc_fig.update_layout(**layout_args)
+        
+        # برای اطمینان از اعمال تم روشن در استریم‌لیت
+        st.plotly_chart(fc_fig, use_container_width=True, theme=None)
 
         st.markdown('<p class="sec-hdr">Sensitivity analysis</p>', unsafe_allow_html=True)
         sens = st.session_state.optimizer.annual_sensitivity(
