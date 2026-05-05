@@ -585,14 +585,14 @@ with tabs[3]:
             f15.add_trace(go.Scatter(x=hist["time"],y=hist["grid_export_kw"],
                 fill="tozeroy",fillcolor="rgba(148,163,184,.2)",
                 line=dict(color=C["grid"],width=2),name="Grid export"))
-        f15.add_trace(go.Scatter(
-    x=hist["time"],
-    y=hist["ev_kw"],
-    fill="tozeroy",
-    fillcolor="rgba(96,165,250,.2)",
-    line=dict(color=C["ev"], width=2),
-    name="EV load"
-))
+            f15.add_trace(go.Scatter(
+                x=hist["time"],
+                y=hist["ev_kw"],
+                fill="tozeroy",
+                fillcolor="rgba(96,165,250,.2)",
+                line=dict(color=C["ev"], width=2),
+                name="EV load"
+            ))
         f15.update_layout(**mk(
             height=210,
             xaxis=dict(
