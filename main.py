@@ -324,7 +324,6 @@ components.html(f"""
 <style>
 *{{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}}
 body{{background:transparent}}
-)
 .wc{{
   background:linear-gradient(135deg,#f0f9ff 0%,#f8fafc 60%,#f0fdf4 100%);
   border:1px solid #bae6fd;border-left:4px solid #0ea5e9;
@@ -402,7 +401,7 @@ function wave(on){{
       b.style.height=h+'px';
       b.style.background=h>14?'#22c55e':'#0ea5e9';
     }});
-  }},55);
+  }}, 55);
 }}
 function go(){{
   if(!syn){{ alert('Speech not supported in this browser.'); return; }}
