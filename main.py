@@ -265,7 +265,183 @@ sub  = st.session_state.sub_result
 
 if s is None:
     st.info("Starting simulation…"); st.stop()
-
+────────────────────────────────────────────────────────
+# =============================================================================
+# VOICE WELCOME BANNER
+# =============================================================================
+hour     = now_dt.hour
+greet    = "Good morning" if hour < 12 else ("Good afternoon" if hour < 17 else "Good evening")
+day_str  = now_dt.strftime("%A")
+date_str = now_dt.strftime("%B %d, %Y")
+time_str = now_dt.strftime("%H:%M")
+ 
+# Build alert text for voice
+voice_alerts = ""
+if alrt.errors():
+    voice_alerts += f"{len(alrt.errors())} critical alert{'s' if len(alrt.errors())>1 else ''} require immediate attention. "
+elif alrt.warnings():
+    voice_alerts += f"{len(alrt.warnings())} warning{'s' if len(alrt.warnings())>1 else ''} detected. "
+else:
+    voice_alerts += "All systems are nominal. No active alerts. "
+ 
+# Build forecast hint
+fc_hint = ""
+if st.session_state.last_fc and hasattr(st.session_state.last_fc, "points"):
+    pts = st.session_state.last_fc.points
+    if pts:
+        peak = max(pts, key=lambda p: p.value)
+        fc_hint = f"AI forecast shows peak solar irradiance of {peak.value:.0f} watts per square meter in {peak.hour_offset+1} hours. "
+ 
+wx_text = ""
+if s.wx_source == "live":
+    wx_text = (f"Current weather in Zagreb: {s.wx_temp_c:.0f} degrees Celsius. "
+               f"Wind speed {s.wx_wind_ms:.1f} meters per second. "
+               f"Solar irradiance {s.wx_irradiance:.0f} watts per square meter. ")
+else:
+    wx_text = f"Weather data: {s.wx_temp_c:.0f} degrees Celsius in Zagreb. "
+ 
+voice_script = (
+    f"{greet}. Welcome to LUMINIH2 Digital Twin. "
+    f"Today is {day_str}, {date_str}. The current time in Zagreb is {time_str}. "
+    f"{wx_text}"
+    f"System briefing: Total generation is {s.total_gen_kw:.1f} kilowatts — "
+    f"{s.solar_kw:.1f} from solar and {s.wind_kw:.1f} from wind. "
+    f"Battery storage is at {s.bess_soc_pct:.0f} percent state of charge. "
+    f"The electrolyzer S30 30 is producing {s.h2_kg_h*1000:.1f} grams of hydrogen per hour. "
+    f"Current LCOH is {s.lcoh:.2f} euros per kilogram — "
+    f"{'below' if s.is_profitable else 'above'} the target of {Config.LCOH_TARGET_EURO_KG} euros. "
+    f"{fc_hint}"
+    f"{voice_alerts}"
+    f"Total hydrogen produced this session: {s.cum_h2_kg*1000:.1f} grams. "
+    f"Carbon dioxide offset: {s.cum_co2_kg:.3f} kilograms. "
+    f"Have a productive session."
+)
+ 
+components.html(f"""
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}}
+body{{background:transparent}}
+.wc{{
+  background:linear-gradient(135deg,#f0f9ff 0%,#f8fafc 60%,#f0fdf4 100%);
+  border:1px solid #bae6fd;border-left:4px solid #0ea5e9;
+  border-radius:12px;padding:16px 20px;
+  display:flex;align-items:center;gap:16px;
+  box-shadow:0 2px 12px rgba(14,165,233,.10);
+}}
+.sb{{
+  width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;flex-shrink:0;
+  background:linear-gradient(135deg,#0ea5e9,#6366f1);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 14px rgba(14,165,233,.35);transition:all .2s;
+}}
+.sb:hover{{transform:scale(1.06);box-shadow:0 6px 20px rgba(14,165,233,.45)}}
+.sb.speaking{{
+  background:linear-gradient(135deg,#22c55e,#0ea5e9);
+  animation:pulse 1.2s ease-in-out infinite;
+}}
+@keyframes pulse{{
+  0%,100%{{box-shadow:0 4px 14px rgba(34,197,94,.4)}}
+  50%{{box-shadow:0 4px 24px rgba(34,197,94,.75)}}
+}}
+.wt{{flex:1}}
+.wg{{font-size:15px;font-weight:600;color:#0f172a;}}
+.wd{{font-size:12px;color:#0369a1;margin-top:3px;font-weight:500;}}
+.wm{{font-size:11px;color:#64748b;margin-top:5px;min-height:18px;line-height:1.4;}}
+.wr{{display:flex;align-items:center;gap:2px;height:22px;margin-top:7px;}}
+.wb{{width:3px;border-radius:2px;background:#0ea5e9;height:3px;transition:height .08s;}}
+.rb{{
+  background:none;border:1px solid #bae6fd;border-radius:8px;
+  padding:4px 12px;font-size:11px;color:#0369a1;cursor:pointer;
+  margin-top:8px;transition:all .15s;font-family:inherit;
+}}
+.rb:hover{{background:#e0f2fe;}}
+</style>
+</head>
+<body>
+<div class="wc">
+  <button class="sb" id="sb" onclick="go()" title="Play system briefing">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+         stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+    </svg>
+  </button>
+  <div class="wt">
+    <div class="wg">{greet} — Welcome to LUMINIH2 Digital Twin</div>
+    <div class="wd">{day_str}, {date_str} &nbsp;·&nbsp; Zagreb {time_str}</div>
+    <div class="wm" id="wm">Click the speaker for your personalised system briefing</div>
+    <div class="wr" id="wr"></div>
+    <button class="rb" onclick="go()">🔊 Replay briefing</button>
+  </div>
+</div>
+ 
+<script>
+const TEXT = `{voice_script.replace("`", "'")}`;
+const syn  = window.speechSynthesis;
+let spk=false, wi=null, bars=[];
+ 
+function buildBars(){{
+  const r=document.getElementById('wr');
+  r.innerHTML=''; bars=[];
+  for(let i=0;i<28;i++){{
+    const b=document.createElement('div');
+    b.className='wb'; r.appendChild(b); bars.push(b);
+  }}
+}}
+function wave(on){{
+  if(wi) clearInterval(wi);
+  if(!on){{ bars.forEach(b=>b.style.height='3px'); return; }}
+  wi=setInterval(()=>{{
+    bars.forEach((b,i)=>{{
+      const h=Math.round(3+Math.abs(Math.sin(Date.now()/180+i*.45))*18);
+      b.style.height=h+'px';
+      b.style.background=h>14?'#22c55e':'#0ea5e9';
+    }});
+  }},55);
+}}
+function go(){{
+  if(!syn){{ alert('Speech not supported in this browser.'); return; }}
+  if(spk){{
+    syn.cancel(); spk=false;
+    document.getElementById('sb').classList.remove('speaking');
+    wave(false);
+    document.getElementById('wm').textContent='Briefing stopped. Click to replay.';
+    return;
+  }}
+  buildBars();
+  document.getElementById('wm').textContent='Playing system briefing…';
+  const u=new SpeechSynthesisUtterance(TEXT);
+  u.lang='en-GB'; u.rate=0.90; u.pitch=1.0;
+  const vs=syn.getVoices();
+  const v=vs.find(x=>x.lang==='en-GB'&&x.name.includes('Daniel'))
+          ||vs.find(x=>x.lang==='en-GB')
+          ||vs.find(x=>x.lang.startsWith('en'));
+  if(v) u.voice=v;
+  u.onstart=()=>{{
+    spk=true;
+    document.getElementById('sb').classList.add('speaking');
+    wave(true);
+  }};
+  u.onend=u.onerror=()=>{{
+    spk=false;
+    document.getElementById('sb').classList.remove('speaking');
+    wave(false);
+    document.getElementById('wm').textContent='Briefing complete. Click to replay.';
+  }};
+  syn.cancel();
+  syn.speak(u);
+}}
+// Auto-play once on load
+window.addEventListener('load', ()=>{{ setTimeout(go, 600); }});
+</script>
+</body>
+</html>
+""", height=130, scrolling=False)
+────────────────────────────────────────────────────────
 # Header
 st.markdown(f"""
 <div class="lumi-header">
