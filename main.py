@@ -605,6 +605,7 @@ with tabs[3]:
             marker=dict(
     colors=[C["ev"], C["grid"], C["solar"]],
     line=dict(color="#ffffff", width=2)
+    )             
 ))
 
 f16.update_layout(**mk(
