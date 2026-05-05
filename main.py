@@ -588,7 +588,14 @@ with tabs[3]:
             f15.add_trace(go.Scatter(x=hist["time"],y=hist["ev_kw"],
                 fill="tozeroy",fillcolor="rgba(96,165,250,.2)",
                 line=dict(color=C["ev"],width=2),name="EV load"))
-            f15.update_layout(**mk(height=210,yaxis_title="kW"))
+            f15.update_layout(**mk(
+                height=210,
+                yaxis=dict(
+                    title="kW",
+                    title_font=dict(color="#111827"),
+        tickfont=dict(color="#111827")
+    )
+))
             st.plotly_chart(f15, use_container_width=True)
 
         f16 = go.Figure(go.Pie(
