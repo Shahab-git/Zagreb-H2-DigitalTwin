@@ -142,7 +142,21 @@ C = dict(
     h2="#0ea5e9", fc="#ef4444", grid="#94a3b8", ev="#60a5fa",
     co2="#22c55e", water="#3b82f6", o2="#f59e0b",
 )
-def mk(**kw): return {**DARK, **kw}
+def mk(**kw):
+    base = {
+        "xaxis": dict(
+            title_font=dict(color="#111827"),
+            tickfont=dict(color="#111827")
+        ),
+        "yaxis": dict(
+            title_font=dict(color="#111827"),
+            tickfont=dict(color="#111827")
+        ),
+        "legend": dict(
+            font=dict(color="#111827")
+        )
+    }
+    return {**DARK, **base, **kw}
 
 # Startup
 try:
