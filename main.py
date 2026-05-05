@@ -437,8 +437,6 @@ function go(){{
   syn.cancel();
   syn.speak(u);
 }}
-// Auto-play once on load
-window.addEventListener('load', ()=>{{ setTimeout(go, 600); }});
 </script>
 </body>
 </html>
