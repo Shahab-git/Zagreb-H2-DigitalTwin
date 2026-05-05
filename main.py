@@ -21,15 +21,6 @@ from scenario_engine import ScenarioEngine, ScenarioParams
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
 
-from gtts import gTTS
-import tempfile
-import base64
-
-
-
-# =============================================================================
-
-
 st.set_page_config(
     page_title="LUMINIH2 Digital Twin",
     page_icon="⚡",
@@ -1021,40 +1012,3 @@ LCOH: {getattr(s, 'lcoh', 0):.2f} €/kg
     text += f"\nErrors: {errors}, Warnings: {warnings}"
 
     return text
-
-
-def speak_text(text):
-    tts = gTTS(text=text, lang="en")
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
-        tts.save(fp.name)
-        audio = open(fp.name, "rb").read()
-
-    b64 = base64.b64encode(audio).decode()
-
-    st.markdown(f"""
-    <audio controls autoplay>
-        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-    </audio>
-    """, unsafe_allow_html=True)
-
-
-# =========================
-# 🔥 UI MAIN
-# =========================
-
-def render_welcome(s, alrt, wx_src):
-
-    st.title("LUMINIH2 Digital Twin")
-
-    st.write("🔊 Click button to test system voice")
-
-    if st.button("▶ Run Welcome Voice"):
-
-        st.info("Generating system status...")
-
-        text = build_welcome_text(s, alrt, wx_src)
-
-        st.text(text)   # 👈 مهم: برای اینکه ببینی خروجی ساخته شده
-
-        speak_text(text)
