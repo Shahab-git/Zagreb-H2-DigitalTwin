@@ -777,9 +777,7 @@ with tabs[5]:
     else:
         st.info("Click **▶ Run Annual Simulation** to generate the 365-day report.")
 # ── TAB 7: OPTIMIZER ──────────────────────────────────────────────────────────
-# ── TAB 7: OPTIMIZER ──────────────────────────────────────────────────────────
 with tabs[6]:
-    # تزریق CSS برای مشکی کردن لیبل و گزینه‌های Radio Button در کل این بخش
     st.markdown("""
         <style>
             /* مشکی کردن متن اصلی (Label) */
@@ -802,7 +800,6 @@ with tabs[6]:
         opt_power = st.slider("Available renewable power (kW)", 0.0, 15.0, float(s.total_gen_kw), 0.1)
         opt_h2_price = st.slider("H₂ sell price (€/kg)", 3.0, 12.0, sc_h2_price, 0.5)
         
-        # کد ساده و بدون تگ HTML (CSS بالا کار رنگ‌آمیزی را انجام می‌دهد)
         opt_source = st.radio("Energy source", ["renewable", "grid"], horizontal=True)
 
     if st.button("🔍 Find Optimal Operating Point"):
@@ -852,8 +849,8 @@ with tabs[6]:
         fc_fig.add_vline(x=bp.elec_power_kw, line_dash="dot", line_color=C["solar"],
                          annotation_text="Best profit", annotation_font_color=C["solar"])
         fc_fig.update_layout(**mk(height=280,
-                                  yaxis=dict(title="Efficiency (%)", color=C["elec"]),
-                                  yaxis2=dict(title="LCOH (€/kg)", overlaying="y", side="right", color=C["h2"])))
+                                  yaxis=dict(title="Efficiency (%)", color="black"), # تیره شد
+                                  yaxis2=dict(title="LCOH (€/kg)", overlaying="y", side="right", color="black"))) # تیره شد
         st.plotly_chart(fc_fig, use_container_width=True)
 
         st.markdown('<p class="sec-hdr">Sensitivity analysis</p>', unsafe_allow_html=True)
