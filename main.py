@@ -21,6 +21,8 @@ from scenario_engine import ScenarioEngine, ScenarioParams
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
 
+import streamlit.components.v1 as components
+
 st.set_page_config(
     page_title="LUMINIH2 Digital Twin",
     page_icon="⚡",
