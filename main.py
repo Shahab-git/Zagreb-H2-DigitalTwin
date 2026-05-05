@@ -578,15 +578,16 @@ with tabs[3]:
         f14.update_layout(**mk(height=220))
         st.plotly_chart(f14, use_container_width=True)
 
- with c2:
+ # Ensure this block is aligned with the 'with c1' or previous block
+    with c2:
         if hd("grid_export_kw"):
-            # You must define the figures first to avoid NameError
+            # 1. Initialize the figures first
             f15 = go.Figure()
             f16 = go.Figure() 
 
             st.markdown('<p class="sec-hdr">Grid export vs EV load</p>', unsafe_allow_html=True)
             
-            # Add traces to f15
+            # 2. Add traces to f15
             f15.add_trace(go.Scatter(
                 x=hist["time"], 
                 y=hist["grid_export_kw"],
@@ -605,7 +606,7 @@ with tabs[3]:
                 name="EV load"
             ))
             
-            # Update layout for f15
+            # 3. Update layout for f15
             f15.update_layout(**mk(
                 height=210,
                 xaxis=dict(
@@ -620,10 +621,7 @@ with tabs[3]:
                 )
             ))
             
-            # Display f15
-            st.plotly_chart(f15, use_container_width=True)
-            
-            # Update layout for f16
+            # 4. Update layout for f16
             f16.update_layout(**mk(
                 height=210,
                 legend=dict(
@@ -633,7 +631,7 @@ with tabs[3]:
                 )
             ))
             
-            # Display the charts as per your request
+            # 5. Display the charts
             st.plotly_chart(f15, use_container_width=True)    
 
 # ── TAB 5: SUBSYSTEMS ─────────────────────────────────────────────────────────
