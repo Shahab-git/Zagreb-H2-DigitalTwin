@@ -602,10 +602,19 @@ with tabs[3]:
             values=[max(.01,s.ev_kw),max(.01,s.grid_export_kw),max(.01,s.heat_kw)],
             labels=["EV Charging","Grid Export","Heat Recovery"],
             hole=0.55,
-            marker=dict(colors=[C["ev"],C["grid"],C["solar"]],
-                        line=dict(color="#ffffff",width=2))))
-        f16.update_layout(**mk(height=210,
-            legend=dict(orientation="h",y=-0.15,font_size=11)))
+            marker=dict(
+    colors=[C["ev"], C["grid"], C["solar"]],
+    line=dict(color="#ffffff", width=2)
+))
+
+f16.update_layout(**mk(
+    height=210,
+    legend=dict(
+        orientation="h",
+        y=-0.15,
+        font=dict(size=11, color="#111827")
+    )
+))
         st.plotly_chart(f16, use_container_width=True)
 
 # ── TAB 5: SUBSYSTEMS ─────────────────────────────────────────────────────────
