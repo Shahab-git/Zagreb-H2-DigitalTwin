@@ -777,35 +777,40 @@ with tabs[5]:
     else:
         st.info("Click **▶ Run Annual Simulation** to generate the 365-day report.")
 # ── TAB 7: OPTIMIZER ──────────────────────────────────────────────────────────
+# ── TAB 7: OPTIMIZER ──────────────────────────────────────────────────────────
 with tabs[6]:
+    # تزریق CSS برای مشکی کردن لیبل و گزینه‌های Radio Button در کل این بخش
+    st.markdown("""
+        <style>
+            /* مشکی کردن متن اصلی (Label) */
+            div[data-testid="stWidgetLabel"] p {
+                color: black !important;
+                font-weight: bold !important;
+            }
+            /* مشکی کردن گزینه‌های رادیویی (Options) */
+            div[data-testid="stMarkdownContainer"] p {
+                color: black !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.markdown('<p class="sec-hdr">Economic operating point optimiser — ITM S30/30</p>',
                 unsafe_allow_html=True)
+    
     oc1, oc2 = st.columns(2)
     with oc1:
         opt_power = st.slider("Available renewable power (kW)", 0.0, 15.0, float(s.total_gen_kw), 0.1)
         opt_h2_price = st.slider("H₂ sell price (€/kg)", 3.0, 12.0, sc_h2_price, 0.5)
         
-        # تغییر رنگ به مشکی خالص با استفاده از HTML
-        opt_source = st.radio(
-            '<span style="color: black; font-weight: bold;">Energy source</span>',
-            [
-                '<span style="color: black;">renewable</span>', 
-                '<span style="color: black;">grid</span>'
-            ],
-            horizontal=True,
-            unsafe_allow_html=True
-        )
+        # کد ساده و بدون تگ HTML (CSS بالا کار رنگ‌آمیزی را انجام می‌دهد)
+        opt_source = st.radio("Energy source", ["renewable", "grid"], horizontal=True)
 
     if st.button("🔍 Find Optimal Operating Point"):
-        # پاک‌سازی تگ‌های HTML برای ارسال مقدار خام به بهینه‌ساز
-        import re
-        clean_source = re.sub('<[^<]+?>', '', opt_source)
-        
         opt_res = st.session_state.optimizer.find_optimal_operating_point(
             available_power_kw=opt_power,
             grid_price_eur_kwh=Config.GRID_PRICE_BUY,
             h2_price_eur_kg=opt_h2_price,
-            source=clean_source)
+            source=opt_source)
         st.session_state.opt_result = opt_res
 
     opt_res = st.session_state.opt_result
