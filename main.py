@@ -607,15 +607,14 @@ with tabs[3]:
                 tickfont=dict(color="#111827")
             )
         ))
-
-f16.update_layout(**mk(
-    height=210,
-    legend=dict(
-        orientation="h",
-        y=-0.15,
-        font=dict(size=11, color="#111827")
-    )
-))
+        f16.update_layout(**mk(
+            height=210,
+            legend=dict(
+                orientation="h",
+                y=-0.15,
+                font=dict(size=11, color="#111827")
+            )
+        ))
         st.plotly_chart(f16, use_container_width=True)
 
 # ── TAB 5: SUBSYSTEMS ─────────────────────────────────────────────────────────
