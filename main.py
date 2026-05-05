@@ -832,59 +832,61 @@ with tabs[6]:
         st.markdown(f'<div class="alert-info">💡 {opt_res.recommendation}<br>{opt_res.reason}</div>',
                     unsafe_allow_html=True)
 
-        # ── بخش نمودار با اصلاح رنگ محورها ──────────────────────────────────────────
-        st.markdown('<p class="sec-hdr">S30/30 operating curve</p>', unsafe_allow_html=True)
-        pts = opt_res.all_points
-        odf = pd.DataFrame({
-            "Power (kW)": [p.elec_power_kw for p in pts],
-            "η (%)": [p.efficiency_pct for p in pts],
-            "LCOH (€/kg)": [p.lcoh_eur_kg for p in pts],
-        })
-        
-        fc_fig = go.Figure()
+   # ── بخش نمودار با رنگ‌های تیره‌تر و اصلاح کامل ────────────────────────────────
+st.markdown('<p class="sec-hdr">S30/30 operating curve</p>', unsafe_allow_html=True)
 
-# ── Efficiency curve (primary y-axis)
+pts = opt_res.all_points
+odf = pd.DataFrame({
+    "Power (kW)": [p.elec_power_kw for p in pts],
+    "η (%)": [p.efficiency_pct for p in pts],
+    "LCOH (€/kg)": [p.lcoh_eur_kg for p in pts],
+})
+
+fc_fig = go.Figure()
+
+# ── Efficiency curve (dark green)
 fc_fig.add_trace(go.Scatter(
     x=odf["Power (kW)"],
     y=odf["η (%)"],
-    line=dict(color=C["elec"], width=2),
+    line=dict(color="#14532d", width=2),  # dark green
     name="Efficiency (%)",
     yaxis="y"
 ))
 
-# ── LCOH curve (secondary y-axis)
+# ── LCOH curve (dark blue)
 fc_fig.add_trace(go.Scatter(
     x=odf["Power (kW)"],
     y=odf["LCOH (€/kg)"],
-    line=dict(color=C["h2"], width=2, dash="dash"),
+    line=dict(color="#1e3a8a", width=2, dash="dash"),  # dark blue
     name="LCOH (€/kg)",
     yaxis="y2"
 ))
 
-# ── FIXED layout (clear + correct meaning)
+# ── FIXED layout with dark axis colors
 fc_fig.update_layout(**mk(
     height=280,
     xaxis=dict(title="Power (kW)"),
 
-    # left axis = Efficiency
+    # left axis = Efficiency (dark green)
     yaxis=dict(
         title="Efficiency (%)",
-        titlefont=dict(color=C["elec"]),
-        tickfont=dict(color=C["elec"])
+        titlefont=dict(color="#14532d"),
+        tickfont=dict(color="#14532d")
     ),
 
-    # right axis = LCOH
+    # right axis = LCOH (dark blue)
     yaxis2=dict(
         title="LCOH (€/kg)",
-        titlefont=dict(color=C["h2"]),
-        tickfont=dict(color=C["h2"]),
+        titlefont=dict(color="#1e3a8a"),
+        tickfont=dict(color="#1e3a8a"),
         overlaying="y",
         side="right"
     ),
 
     legend=dict(orientation="h")
 ))
-        st.plotly_chart(fc_fig, use_container_width=True)
+
+st.plotly_chart(fc_fig, use_container_width=True)
 
         st.markdown('<p class="sec-hdr">Sensitivity analysis</p>', unsafe_allow_html=True)
         sens = st.session_state.optimizer.annual_sensitivity(
