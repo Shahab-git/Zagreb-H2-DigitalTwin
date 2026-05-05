@@ -578,11 +578,23 @@ with tabs[3]:
         f14.update_layout(**mk(height=220))
         st.plotly_chart(f14, use_container_width=True)
 
-    with c2:
+ with c2:
         if hd("grid_export_kw"):
-            f15.add_trace(go.Scatter(x=hist["time"], y=hist["grid_export_kw"],
-            fill="tozeroy", fillcolor="rgba(148,163,184,.2)",
-            line=dict(color=C["grid"], width=2), name="Grid export"))
+            # You must define the figures first to avoid NameError
+            f15 = go.Figure()
+            f16 = go.Figure() 
+
+            st.markdown('<p class="sec-hdr">Grid export vs EV load</p>', unsafe_allow_html=True)
+            
+            # Add traces to f15
+            f15.add_trace(go.Scatter(
+                x=hist["time"], 
+                y=hist["grid_export_kw"],
+                fill="tozeroy", 
+                fillcolor="rgba(148,163,184,.2)",
+                line=dict(color=C["grid"], width=2), 
+                name="Grid export"
+            ))
             
             f15.add_trace(go.Scatter(
                 x=hist["time"],
@@ -593,6 +605,7 @@ with tabs[3]:
                 name="EV load"
             ))
             
+            # Update layout for f15
             f15.update_layout(**mk(
                 height=210,
                 xaxis=dict(
@@ -606,8 +619,11 @@ with tabs[3]:
                     tickfont=dict(color="#111827")
                 )
             ))
+            
+            # Display f15
             st.plotly_chart(f15, use_container_width=True)
             
+            # Update layout for f16
             f16.update_layout(**mk(
                 height=210,
                 legend=dict(
@@ -616,7 +632,9 @@ with tabs[3]:
                     font=dict(size=11, color="#111827")
                 )
             ))
-            st.plotly_chart(f15, use_container_width=True)      
+            
+            # Display the charts as per your request
+            st.plotly_chart(f15, use_container_width=True)    
 
 # ── TAB 5: SUBSYSTEMS ─────────────────────────────────────────────────────────
 with tabs[4]:
