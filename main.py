@@ -439,7 +439,14 @@ with tabs[1]:
             f7 = go.Figure()
             f7.add_trace(go.Bar(x=hist["time"],y=(hist["h2_kg_h"]*1000).round(2),
                 marker_color=C["h2"],marker_line_width=0,name="g/h"))
-            f7.update_layout(**mk(height=200,yaxis_title="g H₂/h"))
+            f7.update_layout(**mk(
+    height=200,
+    yaxis_title="g H₂/h",
+    yaxis=dict(
+        title_font=dict(color="#111827"),
+        tickfont=dict(color="#111827")
+    )
+))
             st.plotly_chart(f7, use_container_width=True)
 
         if hd("elec_eff_pct") and len(hist)>5:
