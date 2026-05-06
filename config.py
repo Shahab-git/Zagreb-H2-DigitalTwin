@@ -53,14 +53,14 @@ class SolarPV:
         datasheet_ref="customer_datasheet_pv"
     ))
     # Panel electrical (STC: 1000 W/m², 25°C, AM1.5)
-    panel_count:         int   = 42
+    panel_count:         int   = 32
     rated_power_wp:      float = 360.0       # W per panel ±5W
     voc_v:               float = 47.0        # V open-circuit
     vmp_v:               float = 39.6        # V at MPP
     isc_a:               float = 9.67        # A short-circuit
     imp_a:               float = 9.10        # A at MPP
     # System
-    total_capacity_kw:   float = 15.0        # Customer spec: 15 kW (42 × 360W ≈ 15.12 kW)
+    total_capacity_kw:   float = 15.0        # Customer spec: ≈ 15.12 kW
     temp_coeff_pct_c:    float = -0.0035     # -0.35%/°C (mono, typical)
     noct_c:              float = 45.0        # Nominal Operating Cell Temp
     # Inverter (ideal values as specified)
