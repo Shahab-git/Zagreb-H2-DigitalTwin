@@ -375,7 +375,6 @@ with tabs[0]:
             html_panel,
             height=900,
             scrolling=True
-            key="ai_forecast_panel_v1"
         )
         components.html(html_panel, height=800, scrolling=False)
 
