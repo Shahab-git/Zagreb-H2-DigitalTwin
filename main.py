@@ -370,7 +370,7 @@ with tabs[0]:
             current_dt=now_dt,
             last_24h_irradiance=last_24h,
         )
-        components.html(html_panel, height=1000, scrolling=False)
+        components.html(html_panel, height=1500, scrolling=False)
 
         st.markdown('<p class="sec-hdr">Weather telemetry</p>', unsafe_allow_html=True)
         wc = st.columns(3)
