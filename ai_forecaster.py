@@ -594,7 +594,7 @@ function draw(){{
   [0,200,400,600,800,1000].forEach(v=>{{
     const y=ty(v);
     cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(P.l+CW,y);cx.stroke();
-    cx.fillStyle='#ffffff';cx.font='11px system-ui';cx.textAlign='right';
+    cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='right';
     cx.fillText(v,P.l-6,y+4);
   }});
   for(let h=0;h<=24;h+=3){{
@@ -607,7 +607,7 @@ function draw(){{
 
   // Axis labels
   cx.save();cx.translate(14,P.t+CH/2);cx.rotate(-Math.PI/2);
-  cx.fillStyle='#ffffff';cx.font='11px system-ui';cx.textAlign='center';
+  cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='center';
   cx.fillText('W/m²',0,0);cx.restore();
   cx.fillStyle='#ffffff';cx.font='11px system-ui';cx.textAlign='center';
   cx.fillText('Hour of day · Zagreb · '+MSHORT[month],P.l+CW/2,P.t+CH+34);
