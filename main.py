@@ -376,7 +376,6 @@ with tabs[0]:
             height=900,
             scrolling=True
         )
-        components.html(html_panel, height=800, scrolling=False)
 
         st.markdown('<p class="sec-hdr">Weather telemetry</p>', unsafe_allow_html=True)
         wc = st.columns(3)
