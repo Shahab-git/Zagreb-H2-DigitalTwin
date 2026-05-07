@@ -348,7 +348,7 @@ class AIPredictor:
         result: Optional[ForecastResult] = None,
         current_dt: Optional[datetime]   = None,
         last_24h_irradiance: Optional[list] = None,
-        height: int = 2000,
+        height: int = 580,
     ) -> str:
         """
         Return a self-contained HTML string with the interactive
