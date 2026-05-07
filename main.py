@@ -373,7 +373,7 @@ with tabs[0]:
         # --- FIXED: proper height + scroll handling (no cut-off issue) ---
         components.html(
             html_panel,
-            height=900,
+            height=1,
             scrolling=True
         )
         components.html(html_panel, height=800, scrolling=False)
