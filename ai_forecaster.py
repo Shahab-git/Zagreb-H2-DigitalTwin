@@ -565,7 +565,7 @@ function draw(){{
   const seg=W/28;
   [0,12,8,18,14,24,30,20,16,10,28,22,16,36,40,34,36,28,20,14,18,24,16,10,14,8,12,0]
     .forEach((h2,i)=>cx.lineTo(i*seg,baseY-h2));
-  # cx.lineTo(W,H);cx.closePath();cx.fill();
+  cx.lineTo(W,H);cx.closePath();cx.fill();
 
   // Cathedral spire
   const spX=W*.40;
