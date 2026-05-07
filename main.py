@@ -230,6 +230,10 @@ with st.sidebar:
 zagreb_tz = timezone(timedelta(hours=2))
 now_dt    = datetime.now(zagreb_tz)
 
+# Load history dataframe before using it
+hist = st.session_state.history.df
+
+
 if st.session_state.sim_running:
     s, fc_res = st.session_state.engine.run(
         override=ov, ev_demand_kw=ev_demand, force_bess_charge=force_bess)
