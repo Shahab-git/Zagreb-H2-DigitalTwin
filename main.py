@@ -313,7 +313,7 @@ st.markdown(f'<div class="switch-log">⚡ EMS → {s.switching_event}</div>',
 # Tabs
 tabs = st.tabs([
     "🌍 Acquisition", "⚗️ Production", "🔋 Storage", "🔌 Distribution",
-    "🧪 Subsystems", "📅 Annual Sim", "💡 Optimizer", "🛡 Safety",
+    "🧪 Subsystems", "📅 Annual Sim", "💡 Optimizer", "📊 Uncertainty", "🛡 Safety",
 ])
 
 def hd(col=None):
