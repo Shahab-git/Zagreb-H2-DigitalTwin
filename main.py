@@ -240,15 +240,18 @@ if st.session_state.sim_running:
         h2_kg_h=s.h2_kg_h, elec_power_kw=s.elec_kw,
         ambient_temp_c=s.wx_temp_c, timestep_sec=Config.TIMESTEP_SEC)
     st.session_state.sub_result = sub
-    # Retrain AI every 20 ticks
-    irr_history = list(hist["wx_irradiance"].dropna()) if "wx_irradiance" in hist.columns else []
-    if irr_history:
-        st.session_state.forecaster.maybe_retrain(irr_history)
+
 
 s    = st.session_state.last_state
 hist = st.session_state.history.df
 alrt = st.session_state.alerts
 sub  = st.session_state.sub_result
+
+# Retrain AI every 20 ticks
+if "wx_irradiance" in hist.columns:
+    irr_history = list(hist["wx_irradiance"].dropna())
+    if len(irr_history) >= 48:
+        st.session_state.forecaster.maybe_retrain(irr_history)
 
 if s is None:
     st.info("Starting simulation…"); st.stop()
