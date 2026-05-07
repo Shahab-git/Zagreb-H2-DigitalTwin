@@ -20,8 +20,7 @@ from core_engine import TickEngine, LCOHAccumulator, AlertSystem, HistoryBuffer
 from scenario_engine import ScenarioEngine, ScenarioParams
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
-
-import streamlit.components.v1 as components
+from uncertainty_engine import UncertaintyEngine
 
 st.set_page_config(
     page_title="LUMINIH2 Digital Twin",
@@ -144,21 +143,7 @@ C = dict(
     h2="#0ea5e9", fc="#ef4444", grid="#94a3b8", ev="#60a5fa",
     co2="#22c55e", water="#3b82f6", o2="#f59e0b",
 )
-def mk(**kw):
-    base = {
-        "xaxis": dict(
-            title_font=dict(color="#111827"),
-            tickfont=dict(color="#111827")
-        ),
-        "yaxis": dict(
-            title_font=dict(color="#111827"),
-            tickfont=dict(color="#111827")
-        ),
-        "legend": dict(
-            font=dict(color="#111827")
-        )
-    }
-    return {**DARK, **base, **kw}
+def mk(**kw): return {**DARK, **kw}
 
 # Startup
 try:
@@ -184,6 +169,8 @@ def _init():
     st.session_state.history      = HistoryBuffer(maxlen=120)
     st.session_state.subsystems   = SubsystemManager()
     st.session_state.optimizer    = EconomicOptimizer(Config)
+    st.session_state.uncertainty  = UncertaintyEngine(Config)
+    st.session_state.unc_report   = None
     st.session_state.scenario_eng = ScenarioEngine(Config)
     st.session_state.engine       = TickEngine(
         Config,
@@ -267,181 +254,7 @@ sub  = st.session_state.sub_result
 
 if s is None:
     st.info("Starting simulation…"); st.stop()
-# ────────────────────────────────────────────────────────
-# =============================================================================
-# VOICE WELCOME BANNER
-# =============================================================================
-hour     = now_dt.hour
-greet    = "Good morning" if hour < 12 else ("Good afternoon" if hour < 17 else "Good evening")
-day_str  = now_dt.strftime("%A")
-date_str = now_dt.strftime("%B %d, %Y")
-time_str = now_dt.strftime("%H:%M")
- 
-# Build alert text for voice
-voice_alerts = ""
-if alrt.errors():
-    voice_alerts += f"{len(alrt.errors())} critical alert{'s' if len(alrt.errors())>1 else ''} require immediate attention. "
-elif alrt.warnings():
-    voice_alerts += f"{len(alrt.warnings())} warning{'s' if len(alrt.warnings())>1 else ''} detected. "
-else:
-    voice_alerts += "All systems are nominal. No active alerts. "
- 
-# Build forecast hint
-fc_hint = ""
-if st.session_state.last_fc and hasattr(st.session_state.last_fc, "points"):
-    pts = st.session_state.last_fc.points
-    if pts:
-        peak = max(pts, key=lambda p: p.value)
-        fc_hint = f"AI forecast shows peak solar irradiance of {peak.value:.0f} watts per square meter in {peak.hour_offset+1} hours. "
- 
-wx_text = ""
-if s.wx_source == "live":
-    wx_text = (f"Current weather in Zagreb: {s.wx_temp_c:.0f} degrees Celsius. "
-               f"Wind speed {s.wx_wind_ms:.1f} meters per second. "
-               f"Solar irradiance {s.wx_irradiance:.0f} watts per square meter. ")
-else:
-    wx_text = f"Weather data: {s.wx_temp_c:.0f} degrees Celsius in Zagreb. "
- 
-voice_script = (
-    f"{greet}. Welcome to LUMINIH2 Digital Twin. "
-    f"Today is {day_str}, {date_str}. The current time in Zagreb is {time_str}. "
-    f"{wx_text}"
-    f"System briefing: Total generation is {s.total_gen_kw:.1f} kilowatts — "
-    f"{s.solar_kw:.1f} from solar and {s.wind_kw:.1f} from wind. "
-    f"Battery storage is at {s.bess_soc_pct:.0f} percent state of charge. "
-    f"The electrolyzer S30 30 is producing {s.h2_kg_h*1000:.1f} grams of hydrogen per hour. "
-    f"Current LCOH is {s.lcoh:.2f} euros per kilogram — "
-    f"{'below' if s.is_profitable else 'above'} the target of {Config.LCOH_TARGET_EURO_KG} euros. "
-    f"{fc_hint}"
-    f"{voice_alerts}"
-    f"Total hydrogen produced this session: {s.cum_h2_kg*1000:.1f} grams. "
-    f"Carbon dioxide offset: {s.cum_co2_kg:.3f} kilograms. "
-    f"Have a productive session."
-)
- 
-components.html(f"""
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-*{{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}}
-body{{background:transparent}}
-.wc{{
-  background:linear-gradient(135deg,#f0f9ff 0%,#f8fafc 60%,#f0fdf4 100%);
-  border:1px solid #bae6fd;border-left:4px solid #0ea5e9;
-  border-radius:12px;padding:16px 20px;
-  display:flex;align-items:center;gap:16px;
-  box-shadow:0 2px 12px rgba(14,165,233,.10);
-}}
-.sb{{
-  width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;flex-shrink:0;
-  background:linear-gradient(135deg,#0ea5e9,#6366f1);
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 14px rgba(14,165,233,.35);transition:all .2s;
-}}
-.sb:hover{{transform:scale(1.06);box-shadow:0 6px 20px rgba(14,165,233,.45)}}
-.sb.speaking{{
-  background:linear-gradient(135deg,#22c55e,#0ea5e9);
-  animation:pulse 1.2s ease-in-out infinite;
-}}
-@keyframes pulse{{
-  0%,100%{{box-shadow:0 4px 14px rgba(34,197,94,.4)}}
-  50%{{box-shadow:0 4px 24px rgba(34,197,94,.75)}}
-}}
-.wt{{flex:1}}
-.wg{{font-size:15px;font-weight:600;color:#0f172a;}}
-.wd{{font-size:12px;color:#0369a1;margin-top:3px;font-weight:500;}}
-.wm{{font-size:11px;color:#64748b;margin-top:5px;min-height:18px;line-height:1.4;}}
-.wr{{display:flex;align-items:center;gap:2px;height:22px;margin-top:7px;}}
-.wb{{width:3px;border-radius:2px;background:#0ea5e9;height:3px;transition:height .08s;}}
-.rb{{
-  background:none;border:1px solid #bae6fd;border-radius:8px;
-  padding:4px 12px;font-size:11px;color:#0369a1;cursor:pointer;
-  margin-top:8px;transition:all .15s;font-family:inherit;
-}}
-.rb:hover{{background:#e0f2fe;}}
-</style>
-</head>
-<body>
-<div class="wc">
-  <button class="sb" id="sb" onclick="go()" title="Play system briefing">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-         stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-    </svg>
-  </button>
-  <div class="wt">
-    <div class="wg">{greet} — Welcome to LUMINIH2 Digital Twin</div>
-    <div class="wd">{day_str}, {date_str} &nbsp;·&nbsp; Zagreb {time_str}</div>
-    <div class="wm" id="wm">Click the speaker for your personalised system briefing</div>
-    <div class="wr" id="wr"></div>
-    <button class="rb" onclick="go()">🔊 Replay briefing</button>
-  </div>
-</div>
- 
-<script>
-const TEXT = `{voice_script.replace("`", "'")}`;
-const syn  = window.speechSynthesis;
-let spk=false, wi=null, bars=[];
- 
-function buildBars(){{
-  const r=document.getElementById('wr');
-  r.innerHTML=''; bars=[];
-  for(let i=0;i<28;i++){{
-    const b=document.createElement('div');
-    b.className='wb'; r.appendChild(b); bars.push(b);
-  }}
-}}
-function wave(on){{
-  if(wi) clearInterval(wi);
-  if(!on){{ bars.forEach(b=>b.style.height='3px'); return; }}
-  wi=setInterval(()=>{{
-    bars.forEach((b,i)=>{{
-      const h=Math.round(3+Math.abs(Math.sin(Date.now()/180+i*.45))*18);
-      b.style.height=h+'px';
-      b.style.background=h>14?'#22c55e':'#0ea5e9';
-    }});
-  }}, 55);
-}}
-function go(){{
-  if(!syn){{ alert('Speech not supported in this browser.'); return; }}
-  if(spk){{
-    syn.cancel(); spk=false;
-    document.getElementById('sb').classList.remove('speaking');
-    wave(false);
-    document.getElementById('wm').textContent='Briefing stopped. Click to replay.';
-    return;
-  }}
-  buildBars();
-  document.getElementById('wm').textContent='Playing system briefing…';
-  const u=new SpeechSynthesisUtterance(TEXT);
-  u.lang='en-GB'; u.rate=0.90; u.pitch=1.0;
-  const vs=syn.getVoices();
-  const v=vs.find(x=>x.lang==='en-GB'&&x.name.includes('Daniel'))
-          ||vs.find(x=>x.lang==='en-GB')
-          ||vs.find(x=>x.lang.startsWith('en'));
-  if(v) u.voice=v;
-  u.onstart=()=>{{
-    spk=true;
-    document.getElementById('sb').classList.add('speaking');
-    wave(true);
-  }};
-  u.onend=u.onerror=()=>{{
-    spk=false;
-    document.getElementById('sb').classList.remove('speaking');
-    wave(false);
-    document.getElementById('wm').textContent='Briefing complete. Click to replay.';
-  }};
-  syn.cancel();
-  syn.speak(u);
-}}
-</script>
-</body>
-</html>
-""", height=130, scrolling=False)
-#  ────────────────────────────────────────────────────────
+
 # Header
 st.markdown(f"""
 <div class="lumi-header">
@@ -521,15 +334,8 @@ with tabs[0]:
         fig.add_annotation(text=f"<b>{s.total_gen_kw:.1f}</b><br>kW",
                            showarrow=False, font=dict(size=14,color="#111827"),
                            x=0.5, y=0.5, xref="paper", yref="paper")
-        fig.update_layout(**mk(
-    height=260,
-    showlegend=True,
-    legend=dict(
-        orientation="h",
-        y=-0.1,
-        font=dict(size=11, color="#111827")
-    )
-))
+        fig.update_layout(**mk(height=260, showlegend=True,
+                               legend=dict(orientation="h",y=-0.1,font_size=11)))
         st.plotly_chart(fig, use_container_width=True)
 
         if hd("wx_irradiance"):
@@ -538,14 +344,7 @@ with tabs[0]:
             f2.add_trace(go.Scatter(x=hist["time"], y=hist["wx_irradiance"],
                 fill="tozeroy", fillcolor="rgba(245,158,11,.12)",
                 line=dict(color=C["solar"],width=2), name="W/m²"))
-            f2.update_layout(**mk(
-                height=170, 
-                yaxis=dict(
-                    title="W/m²",
-                    title_font=dict(color="#111827"),
-                    tickfont=dict(color="#111827")
-    )
-))
+            f2.update_layout(**mk(height=170, yaxis_title="W/m²"))
             st.plotly_chart(f2, use_container_width=True)
 
     with c2:
@@ -567,14 +366,7 @@ with tabs[0]:
             f3.add_trace(go.Scatter(x=fdf["h"],y=fdf["v"],
                 line=dict(color=C["h2"],width=2),mode="lines+markers",
                 marker=dict(size=5),name="Forecast W/m²"))
-            f3.update_layout(**mk(
-                height=220,
-                yaxis=dict(
-                    title="W/m²",
-                    title_font=dict(color="#111827"),
-                    tickfont=dict(color="#111827")
-    )
-))
+            f3.update_layout(**mk(height=220,yaxis_title="W/m²"))
             st.plotly_chart(f3, use_container_width=True)
         else:
             st.info("Accumulating data for AI training…")
@@ -606,14 +398,7 @@ with tabs[1]:
                     f5.add_trace(go.Scatter(x=hist["time"],y=hist[col],
                         stackgroup="one",name=name,
                         line=dict(color=color,width=1),fillcolor=fill))
-            f5.update_layout(**mk(
-                height=240,
-                yaxis=dict(
-                    title="kW",
-                    title_font=dict(color="#111827"),
-        tickfont=dict(color="#111827")
-    )
-))
+            f5.update_layout(**mk(height=240,yaxis_title="kW"))
             st.plotly_chart(f5, use_container_width=True)
 
         st.markdown('<p class="sec-hdr">Stack SoH</p>', unsafe_allow_html=True)
@@ -636,14 +421,7 @@ with tabs[1]:
             f7 = go.Figure()
             f7.add_trace(go.Bar(x=hist["time"],y=(hist["h2_kg_h"]*1000).round(2),
                 marker_color=C["h2"],marker_line_width=0,name="g/h"))
-            f7.update_layout(**mk(
-    height=200,
-    yaxis=dict(
-        title="g H₂/h",
-        title_font=dict(color="#111827"),
-        tickfont=dict(color="#111827")
-    )
-))
+            f7.update_layout(**mk(height=200,yaxis_title="g H₂/h"))
             st.plotly_chart(f7, use_container_width=True)
 
         if hd("elec_eff_pct") and len(hist)>5:
@@ -685,14 +463,7 @@ with tabs[2]:
             f10.add_hline(y=55,line_dash="dash",line_color=C["solar"],annotation_text="⚠ 55°C")
             f10.add_hline(y=Config.THERMAL_RUNAWAY_TEMP,line_dash="dash",
                 line_color=C["fc"],annotation_text="🔥 Runaway")
-            f10.update_layout(**mk(
-                height=170,
-                yaxis=dict(
-                    title="°C",
-                    title_font=dict(color="#111827"),
-                    tickfont=dict(color="#111827")
-    )
-))
+            f10.update_layout(**mk(height=170,yaxis_title="°C"))
             st.plotly_chart(f10, use_container_width=True)
 
     with c2:
@@ -703,15 +474,7 @@ with tabs[2]:
             marker_color=[C["h2"],C["elec"],C["bess"]],marker_line_width=0,
             text=[f"{v:.1f}%" for v in [s.buffer_pct,s.main_tank_pct,s.hrs_pct]],
             textposition="outside",textfont=dict(color="#111827")))
-        f11.update_layout(**mk(
-    height=230,
-    yaxis=dict(
-        range=[0, 115],
-        title="%",
-        title_font=dict(color="#111827"),
-        tickfont=dict(color="#111827")
-    )
-))
+        f11.update_layout(**mk(height=230,yaxis_range=[0,115],yaxis_title="%"))
         st.plotly_chart(f11, use_container_width=True)
 
         f12 = go.Figure(go.Indicator(
@@ -754,46 +517,29 @@ with tabs[3]:
         f14.update_layout(**mk(height=220))
         st.plotly_chart(f14, use_container_width=True)
 
- # Ensure this block is aligned with the 'with c1' or previous block
     with c2:
         if hd("grid_export_kw"):
             st.markdown('<p class="sec-hdr">Grid export vs EV load</p>', unsafe_allow_html=True)
             f15 = go.Figure()
-            f15.add_trace(go.Scatter(x=hist["time"], y=hist["grid_export_kw"],
-                                     fill="tozeroy", fillcolor="rgba(148,163,184,.2)",
-                                     line=dict(color=C["grid"], width=2), name="Grid export"))
-            f15.add_trace(go.Scatter(x=hist["time"], y=hist["ev_kw"],
-                                     fill="tozeroy", fillcolor="rgba(96,165,250,.2)",
-                                     line=dict(color=C["ev"], width=2), name="EV load"))
-            f15.update_layout(**mk(
-                height=210, 
-                yaxis=dict(
-                    title="Power (kW)",
-                    title_font=dict(color="#111827"),
-                    tickfont=dict(color="#111827")
-    )
-))
+            f15.add_trace(go.Scatter(x=hist["time"],y=hist["grid_export_kw"],
+                fill="tozeroy",fillcolor="rgba(148,163,184,.2)",
+                line=dict(color=C["grid"],width=2),name="Grid export"))
+            f15.add_trace(go.Scatter(x=hist["time"],y=hist["ev_kw"],
+                fill="tozeroy",fillcolor="rgba(96,165,250,.2)",
+                line=dict(color=C["ev"],width=2),name="EV load"))
+            f15.update_layout(**mk(height=210,yaxis_title="kW"))
             st.plotly_chart(f15, use_container_width=True)
-            f16 = go.Figure(go.Pie(
-                values=[
-                    max(.01, s.ev_kw),
-                    max(.01, s.grid_export_kw),
-                    max(.01, s.heat_kw)
-                ],
-                labels=["EV Charging", "Grid Export", "Heat Recovery"],
-                hole=0.55,
-                marker=dict
-                    (colors=[C["ev"], C["grid"], C["solar"]],
-                            line=dict(color="#ffffff", width=2))))
-            f16.update_layout(**mk(
-                height=210,
-                legend=dict(
-                    orientation="h", 
-                    y=-0.15, 
-                    font=dict(size=11, color="#111827")
-    )
-))
-            st.plotly_chart(f16, use_container_width=True)
+
+        f16 = go.Figure(go.Pie(
+            values=[max(.01,s.ev_kw),max(.01,s.grid_export_kw),max(.01,s.heat_kw)],
+            labels=["EV Charging","Grid Export","Heat Recovery"],
+            hole=0.55,
+            marker=dict(colors=[C["ev"],C["grid"],C["solar"]],
+                        line=dict(color="#ffffff",width=2))))
+        f16.update_layout(**mk(height=210,
+            legend=dict(orientation="h",y=-0.15,font_size=11)))
+        st.plotly_chart(f16, use_container_width=True)
+
 # ── TAB 5: SUBSYSTEMS ─────────────────────────────────────────────────────────
 with tabs[4]:
     if sub is None:
@@ -889,14 +635,7 @@ with tabs[5]:
             f_m = go.Figure()
             f_m.add_trace(go.Bar(x=mdf["month"],y=mdf["h2"],
                 marker_color=C["h2"],marker_line_width=0,name="H₂ kg"))
-            f_m.update_layout(**mk(
-                height=220,
-                yaxis=dict(
-                    title="kg H₂",
-                    title_font=dict(color="#111827"),
-                    tickfont=dict(color="#111827")
-    )
-))
+            f_m.update_layout(**mk(height=220,yaxis_title="kg H₂"))
             st.plotly_chart(f_m, use_container_width=True)
 
         with c2:
@@ -906,15 +645,7 @@ with tabs[5]:
                 name="Solar kWh",marker_color=C["solar"],marker_line_width=0))
             f_g.add_trace(go.Bar(x=mdf["month"],y=mdf["wind"],
                 name="Wind kWh",marker_color=C["wind"],marker_line_width=0))
-            f_g.update_layout(**mk(
-                height=220,
-                barmode="stack",
-                yaxis=dict(
-                    title="kWh",
-                    title_font=dict(color="#111827"),
-                    tickfont=dict(color="#111827")
-)
-))
+            f_g.update_layout(**mk(height=220,barmode="stack",yaxis_title="kWh"))
             st.plotly_chart(f_g, use_container_width=True)
 
         st.markdown('<p class="sec-hdr">Scenario comparison</p>', unsafe_allow_html=True)
@@ -952,31 +683,16 @@ with tabs[5]:
         rc2[3].metric("BESS life remaining",f"{rpt.bess_remaining_life_pct:.1f}%")
     else:
         st.info("Click **▶ Run Annual Simulation** to generate the 365-day report.")
+
 # ── TAB 7: OPTIMIZER ──────────────────────────────────────────────────────────
 with tabs[6]:
-    st.markdown("""
-        <style>
-            /* مشکی کردن متن اصلی (Label) */
-            div[data-testid="stWidgetLabel"] p {
-                color: black !important;
-                font-weight: bold !important;
-            }
-            /* مشکی کردن گزینه‌های رادیویی (Options) */
-            div[data-testid="stMarkdownContainer"] p {
-                color: black !important;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
     st.markdown('<p class="sec-hdr">Economic operating point optimiser — ITM S30/30</p>',
                 unsafe_allow_html=True)
-    
-    oc1, oc2 = st.columns(2)
+    oc1,oc2 = st.columns(2)
     with oc1:
-        opt_power = st.slider("Available renewable power (kW)", 0.0, 15.0, float(s.total_gen_kw), 0.1)
-        opt_h2_price = st.slider("H₂ sell price (€/kg)", 3.0, 12.0, sc_h2_price, 0.5)
-        
-        opt_source = st.radio("Energy source", ["renewable", "grid"], horizontal=True)
+        opt_power    = st.slider("Available renewable power (kW)",0.0,15.0,float(s.total_gen_kw),0.1)
+        opt_h2_price = st.slider("H₂ sell price (€/kg)",3.0,12.0,sc_h2_price,0.5)
+        opt_source   = st.radio("Energy source",["renewable","grid"],horizontal=True)
 
     if st.button("🔍 Find Optimal Operating Point"):
         opt_res = st.session_state.optimizer.find_optimal_operating_point(
@@ -988,112 +704,209 @@ with tabs[6]:
 
     opt_res = st.session_state.opt_result
     if opt_res and opt_res.all_points:
-        bl = opt_res.best_lcoh_point;
-        bp = opt_res.best_profit_point
+        bl = opt_res.best_lcoh_point; bp = opt_res.best_profit_point
         oc = st.columns(2)
         with oc[0]:
             st.markdown('<p class="sec-hdr">Best LCOH point</p>', unsafe_allow_html=True)
-            kpi(st, "Load", f"{bl.elec_power_kw:.2f} kW",
-                f"H₂ {bl.h2_rate_kg_h * 1000:.1f} g/h · η {bl.efficiency_pct:.1f}%", "kpi-cyan")
-            st.metric("LCOH", f"€{bl.lcoh_eur_kg:.3f}/kg",
+            kpi(st,"Load",f"{bl.elec_power_kw:.2f} kW",
+                f"H₂ {bl.h2_rate_kg_h*1000:.1f} g/h · η {bl.efficiency_pct:.1f}%","kpi-cyan")
+            st.metric("LCOH",f"€{bl.lcoh_eur_kg:.3f}/kg",
                       delta=f"vs target €{Config.LCOH_TARGET_EURO_KG}")
-            st.metric("Annual net profit", f"€{bl.net_profit_eur:,.0f}")
+            st.metric("Annual net profit",f"€{bl.net_profit_eur:,.0f}")
         with oc[1]:
             st.markdown('<p class="sec-hdr">Best profit point</p>', unsafe_allow_html=True)
-            kpi(st, "Load", f"{bp.elec_power_kw:.2f} kW",
-                f"H₂ {bp.h2_rate_kg_h * 1000:.1f} g/h · η {bp.efficiency_pct:.1f}%", "kpi-green")
-            st.metric("LCOH", f"€{bp.lcoh_eur_kg:.3f}/kg")
-            st.metric("Annual net profit", f"€{bp.net_profit_eur:,.0f}")
+            kpi(st,"Load",f"{bp.elec_power_kw:.2f} kW",
+                f"H₂ {bp.h2_rate_kg_h*1000:.1f} g/h · η {bp.efficiency_pct:.1f}%","kpi-green")
+            st.metric("LCOH",f"€{bp.lcoh_eur_kg:.3f}/kg")
+            st.metric("Annual net profit",f"€{bp.net_profit_eur:,.0f}")
 
         st.markdown(f'<div class="alert-info">💡 {opt_res.recommendation}<br>{opt_res.reason}</div>',
                     unsafe_allow_html=True)
-        
+
         st.markdown('<p class="sec-hdr">S30/30 operating curve</p>', unsafe_allow_html=True)
         pts = opt_res.all_points
         odf = pd.DataFrame({
             "Power (kW)": [p.elec_power_kw for p in pts],
-            "η (%)": [p.efficiency_pct for p in pts],
-            "LCOH (€/kg)": [p.lcoh_eur_kg for p in pts],
-})
-
-# ── S30/30 Operating Curve Plot ──────────────────────────────────────────
-        st.markdown('<p class="sec-hdr">S30/30 operating curve</p>', unsafe_allow_html=True)
-        pts = opt_res.all_points
-        odf = pd.DataFrame({
-            "Power (kW)":  [p.elec_power_kw  for p in pts],
-            "η (%)":       [p.efficiency_pct for p in pts],
-            "LCOH (€/kg)": [p.lcoh_eur_kg    for p in pts],
+            "η (%)":      [p.efficiency_pct for p in pts],
+            "LCOH (€/kg)":[p.lcoh_eur_kg for p in pts],
         })
-
         fc_fig = go.Figure()
-        fc_fig.add_trace(go.Scatter(
-            x=odf["Power (kW)"],
-            y=odf["η (%)"],
-            line=dict(color="#064e3b", width=2.5),
-            name="Efficiency (%)",
-            yaxis="y",
-        ))
-        fc_fig.add_trace(go.Scatter(
-            x=odf["Power (kW)"],
-            y=odf["LCOH (€/kg)"],
-            line=dict(color="#1e3a8a", width=2.5, dash="dash"),
-            name="LCOH (€/kg)",
-            yaxis="y2",
-        ))
-        fc_fig.update_layout(
-            height=300,
-            plot_bgcolor="white",
-            paper_bgcolor="white",
-            margin=dict(l=50, r=50, t=50, b=50),
-            xaxis=dict(
-                title=dict(text="<b>Power (kW)</b>", font=dict(color="black", size=12)),
-                tickfont=dict(color="black"),
-                linecolor="black",
-                gridcolor="#f0f0f0",
-            ),
-            yaxis=dict(
-                title=dict(text="<b>Efficiency (%)</b>", font=dict(color="#064e3b", size=12)),
-                tickfont=dict(color="#064e3b"),
-                gridcolor="#f0f0f0",
-                zeroline=False,
-            ),
-            yaxis2=dict(
-                title=dict(text="<b>LCOH (€/kg)</b>", font=dict(color="#1e3a8a", size=12)),
-                tickfont=dict(color="#1e3a8a"),
-                overlaying="y",
-                side="right",
-                showgrid=False,
-                zeroline=False,
-            ),
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1,
-                font=dict(color="black", size=10),
-            ),
-        )
-        # theme=None preserves custom dark colours instead of Streamlit's default theme
-        st.plotly_chart(fc_fig, use_container_width=True, theme=None)
+        fc_fig.add_trace(go.Scatter(x=odf["Power (kW)"],y=odf["η (%)"],
+            line=dict(color=C["elec"],width=2),name="η (%)",yaxis="y"))
+        fc_fig.add_trace(go.Scatter(x=odf["Power (kW)"],y=odf["LCOH (€/kg)"],
+            line=dict(color=C["h2"],width=2,dash="dash"),name="LCOH €/kg",yaxis="y2"))
+        fc_fig.add_vline(x=bl.elec_power_kw,line_dash="dot",line_color=C["bess"],
+            annotation_text="Best LCOH",annotation_font_color=C["bess"])
+        fc_fig.add_vline(x=bp.elec_power_kw,line_dash="dot",line_color=C["solar"],
+            annotation_text="Best profit",annotation_font_color=C["solar"])
+        fc_fig.update_layout(**mk(height=280,
+            yaxis=dict(title="Efficiency (%)",color=C["elec"]),
+            yaxis2=dict(title="LCOH (€/kg)",overlaying="y",side="right",color=C["h2"])))
+        st.plotly_chart(fc_fig, use_container_width=True)
 
         st.markdown('<p class="sec-hdr">Sensitivity analysis</p>', unsafe_allow_html=True)
         sens = st.session_state.optimizer.annual_sensitivity(
-            h2_prices=[4.0, 5.0, 6.0, 7.0, 8.0], pv_scales=[1.0, 1.5, 2.0])
-
+            h2_prices=[4.0,5.0,6.0,7.0,8.0], pv_scales=[1.0,1.5,2.0])
         sdf = pd.DataFrame(sens)
-        sdf.columns = ["PV scale", "H₂ price €/kg", "Best LCOH €/kg",
-                       "Annual H₂ kg", "Net profit €", "Profitable"]
-
-        sdf["Profitable"]   = sdf["Profitable"].map({True: "✅", False: "❌"})
+        sdf.columns = ["PV scale","H₂ price €/kg","Best LCOH €/kg",
+                       "Annual H₂ kg","Net profit €","Profitable"]
+        sdf["Profitable"]   = sdf["Profitable"].map({True:"✅",False:"❌"})
         sdf["Net profit €"] = sdf["Net profit €"].apply(lambda x: f"€{x:,.0f}")
         sdf["Annual H₂ kg"] = sdf["Annual H₂ kg"].apply(lambda x: f"{x:.0f}")
-
         st.dataframe(sdf, use_container_width=True, hide_index=True)
     else:
         st.info("Click **🔍 Find Optimal Operating Point** to run the analysis.")
+
 # ── TAB 8: SAFETY ─────────────────────────────────────────────────────────────
+
+# ── TAB 8: UNCERTAINTY ────────────────────────────────────────────────────────
 with tabs[7]:
+    st.markdown('<p class="sec-hdr">Monte Carlo probabilistic analysis · Zagreb climatology · 80% confidence intervals</p>',
+                unsafe_allow_html=True)
+
+    uc1, uc2 = st.columns([1, 2])
+    with uc1:
+        unc_h2_price = st.slider("H₂ sell price (€/kg)", 3.0, 12.0, 6.0, 0.5, key="unc_h2")
+        unc_opex     = st.number_input("Annual OPEX (€)", value=8000, step=500, key="unc_opex")
+        unc_n        = st.select_slider("Simulations", [100, 200, 500, 1000], value=500, key="unc_n")
+    with uc2:
+        st.markdown(
+            '<div class="alert-info">ℹ️ <b>What this shows:</b> '
+            'Each simulation samples a different year of Zagreb weather, panel tolerances, '
+            'and electrolyzer efficiency. P10/P50/P90 shows how much performance varies '
+            'due to factors outside your control — mainly Zagreb weather variability.</div>',
+            unsafe_allow_html=True)
+
+    if st.button("▶ Run Uncertainty Analysis", type="primary", key="unc_run"):
+        with st.spinner(f"Running {unc_n} Monte Carlo simulations…"):
+            st.session_state.unc_report = st.session_state.uncertainty.run(
+                n_simulations=int(unc_n),
+                h2_price_eur_kg=unc_h2_price,
+                opex_annual_eur=unc_opex,
+            )
+
+    unc = st.session_state.unc_report
+    if unc:
+        st.markdown("")
+        uk = st.columns(4)
+        kpi(uk[0], "H₂ Production P50",
+            f"{unc.annual_h2_kg.p50:.0f} kg/yr",
+            f"P10:{unc.annual_h2_kg.p10:.0f} — P90:{unc.annual_h2_kg.p90:.0f}", "kpi-cyan")
+        kpi(uk[1], "Operating LCOH P50",
+            f"€{unc.op_lcoh_eur_kg.p50:.2f}/kg",
+            f"P10:€{unc.op_lcoh_eur_kg.p10:.2f} — P90:€{unc.op_lcoh_eur_kg.p90:.2f}", "kpi-amber")
+        kpi(uk[2], "CO₂ Offset P50",
+            f"{unc.co2_offset_ton.p50:.1f} ton/yr",
+            "vs Steam Methane Reforming", "kpi-green")
+        kpi(uk[3], "Revenue / OPEX",
+            f"{unc.revenue_to_opex_pct.p50:.0f}%",
+            f"P10:{unc.revenue_to_opex_pct.p10:.0f}% — P90:{unc.revenue_to_opex_pct.p90:.0f}%",
+            "kpi-purple")
+
+        st.markdown("")
+        col_l, col_r = st.columns(2)
+
+        with col_l:
+            st.markdown('<p class="sec-hdr">H₂ production — probability distribution</p>',
+                        unsafe_allow_html=True)
+            fig_h = go.Figure()
+            fig_h.add_trace(go.Histogram(
+                x=unc.samples_h2, nbinsx=30,
+                marker_color=C["h2"], marker_line_color="#ffffff",
+                marker_line_width=0.5, opacity=0.85, name="Simulations"))
+            for val, label, color in [
+                (unc.annual_h2_kg.p10, "P10", C["fc"]),
+                (unc.annual_h2_kg.p50, "P50", C["bess"]),
+                (unc.annual_h2_kg.p90, "P90", C["wind"]),
+            ]:
+                fig_h.add_vline(x=val, line_dash="dash" if label != "P50" else "solid",
+                    line_color=color, line_width=2,
+                    annotation_text=f"{label}: {val:.0f}",
+                    annotation_font_color=color, annotation_font_size=11)
+            fig_h.update_layout(**mk(height=230,
+                xaxis_title="kg H₂/year", yaxis_title="Count", showlegend=False))
+            st.plotly_chart(fig_h, use_container_width=True)
+
+            st.markdown('<p class="sec-hdr">Sensitivity — key uncertainty drivers</p>',
+                        unsafe_allow_html=True)
+            sens_items = list(unc.sensitivity.items())[:6]
+            colors_s = [C["solar"],C["solar"],C["bess"],C["elec"],C["grid"],C["grid"]]
+            fig_s = go.Figure(go.Bar(
+                x=[v for _,v in sens_items],
+                y=[k for k,_ in sens_items],
+                orientation="h",
+                marker_color=colors_s[:len(sens_items)],
+                marker_line_width=0,
+                text=[f"{v:.0f}%" for _,v in sens_items],
+                textposition="outside",
+                textfont=dict(color="#111827"),
+            ))
+            fig_s.update_layout(**mk(height=230,
+                xaxis_title="Correlation with H₂ output (%)",
+                yaxis=dict(autorange="reversed"),
+                xaxis_range=[0, 80]))
+            st.plotly_chart(fig_s, use_container_width=True)
+
+        with col_r:
+            st.markdown('<p class="sec-hdr">Operating LCOH — probability distribution</p>',
+                        unsafe_allow_html=True)
+            fig_l = go.Figure()
+            fig_l.add_trace(go.Histogram(
+                x=unc.samples_lcoh, nbinsx=30,
+                marker_color=C["elec"], marker_line_color="#ffffff",
+                marker_line_width=0.5, opacity=0.85, name="Simulations"))
+            for val, label, color in [
+                (unc.op_lcoh_eur_kg.p10, "P10", C["fc"]),
+                (unc.op_lcoh_eur_kg.p50, "P50", C["bess"]),
+                (unc.op_lcoh_eur_kg.p90, "P90", C["wind"]),
+            ]:
+                fig_l.add_vline(x=val, line_dash="dash" if label != "P50" else "solid",
+                    line_color=color, line_width=2,
+                    annotation_text=f"{label}: €{val:.2f}",
+                    annotation_font_color=color, annotation_font_size=11)
+            fig_l.update_layout(**mk(height=230,
+                xaxis_title="€/kg", yaxis_title="Count", showlegend=False))
+            st.plotly_chart(fig_l, use_container_width=True)
+
+            st.markdown('<p class="sec-hdr">Full probabilistic summary</p>',
+                        unsafe_allow_html=True)
+            rows = [
+                ("Annual H₂",       f"{unc.annual_h2_kg.p10:.0f}",       f"{unc.annual_h2_kg.p50:.0f}",       f"{unc.annual_h2_kg.p90:.0f}",       "kg/yr"),
+                ("Daily H₂",        f"{unc.daily_h2_g.p10:.0f}",         f"{unc.daily_h2_g.p50:.0f}",         f"{unc.daily_h2_g.p90:.0f}",         "g/day"),
+                ("CO₂ offset",      f"{unc.co2_offset_ton.p10:.1f}",     f"{unc.co2_offset_ton.p50:.1f}",     f"{unc.co2_offset_ton.p90:.1f}",     "ton/yr"),
+                ("Op. LCOH",        f"€{unc.op_lcoh_eur_kg.p10:.2f}",    f"€{unc.op_lcoh_eur_kg.p50:.2f}",    f"€{unc.op_lcoh_eur_kg.p90:.2f}",    "€/kg"),
+                ("Revenue",         f"€{unc.annual_op_revenue.p10:.0f}", f"€{unc.annual_op_revenue.p50:.0f}", f"€{unc.annual_op_revenue.p90:.0f}", "€/yr"),
+                ("Elec. hours",     f"{unc.electrolyzer_hours.p10:.0f}", f"{unc.electrolyzer_hours.p50:.0f}", f"{unc.electrolyzer_hours.p90:.0f}", "h/yr"),
+                ("Grid independence",f"{unc.grid_independence.p10:.0f}", f"{unc.grid_independence.p50:.0f}",  f"{unc.grid_independence.p90:.0f}",  "%"),
+            ]
+            df_unc = pd.DataFrame(rows,
+                columns=["Metric","P10 (pessimistic)","P50 (likely)","P90 (optimistic)","Unit"])
+            st.dataframe(df_unc, use_container_width=True, hide_index=True)
+
+        st.markdown('<p class="sec-hdr">Scale-up pathway to commercial viability</p>',
+                    unsafe_allow_html=True)
+        sc_data = [
+            (f"{'✅' if sc.is_commercial else '🔬'} {sc.electrolyzer_kw:.0f} kW",
+             f"{sc.h2_ton_year:.1f} ton",
+             f"€{sc.annual_revenue:,.0f}",
+             f"€{sc.op_lcoh:.2f}/kg",
+             "Commercial ✅" if sc.is_commercial else "Pilot 🔬")
+            for sc in unc.scale_up
+        ]
+        df_sc = pd.DataFrame(sc_data,
+            columns=["Electrolyzer Scale","H₂/year","Revenue/year","Op. LCOH","Category"])
+        st.dataframe(df_sc, use_container_width=True, hide_index=True)
+
+        st.markdown(
+            '<div class="alert-info">ℹ️ <b>Scale-up note:</b> '
+            'The operating LCOH (€/kg) stays the same at any scale — it reflects '
+            'the physics of the S30/30 PEM stack. Commercial full-LCOH target of €4.5/kg '
+            'is achieved when CAPEX (€250k) is spread over ≥1 MW production volume.</div>',
+            unsafe_allow_html=True)
+    else:
+        st.info("Click **▶ Run Uncertainty Analysis** to generate the probabilistic report.")
+
+with tabs[8]:
     c1,c2 = st.columns(2)
     with c1:
         st.markdown('<p class="sec-hdr">System health matrix</p>', unsafe_allow_html=True)
@@ -1165,26 +978,6 @@ with tabs[7]:
 # Auto-refresh
 try:
     from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=refresh*1000, key="lumi_v41_r")
+    st_autorefresh(interval=refresh*1000, key="lumi_v42_r")
 except ImportError:
     import time; time.sleep(refresh); st.rerun()
-
-def build_welcome_text(s, alrt, wx_src):
-    now = datetime.now(timezone(timedelta(hours=2)))
-
-    text = f"""
-Welcome to LUMINIH2 Digital Twin.
-Time: {now.strftime('%H:%M:%S')}
-
-Generation: {getattr(s, 'total_gen_kw', 0):.1f} kW
-Battery: {getattr(s, 'bess_soc_pct', 0):.0f} %
-Hydrogen: {getattr(s, 'h2_kg_h', 0)*1000:.1f} g/h
-LCOH: {getattr(s, 'lcoh', 0):.2f} €/kg
-"""
-
-    errors = len(alrt.errors()) if alrt else 0
-    warnings = len(alrt.warnings()) if alrt else 0
-
-    text += f"\nErrors: {errors}, Warnings: {warnings}"
-
-    return text
