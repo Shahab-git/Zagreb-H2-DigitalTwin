@@ -560,7 +560,7 @@ function draw(){{
 
   // Zagreb skyline
   const baseY=H-32;
-  cx.fillStyle = 'rgba(255, 255, 255, 0)';
+  cx.fillStyle = hour >= sR && hour <= sS ? '#1e293b' : '#0f1623';
   cx.beginPath();cx.moveTo(0,H);
   const seg=W/28;
   [0,12,8,18,14,24,30,20,16,10,28,22,16,36,40,34,36,28,20,14,18,24,16,10,14,8,12,0]
