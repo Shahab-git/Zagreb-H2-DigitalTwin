@@ -607,9 +607,9 @@ function draw(){{
 
   // Axis labels
   cx.save();cx.translate(14,P.t+CH/2);cx.rotate(-Math.PI/2);
-  cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='center';
+  cx.fillStyle='#ffffff';cx.font='11px system-ui';cx.textAlign='center';
   cx.fillText('W/m²',0,0);cx.restore();
-  cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='center';
+  cx.fillStyle='##ffffff';cx.font='11px system-ui';cx.textAlign='center';
   cx.fillText('Hour of day · Zagreb · '+MSHORT[month],P.l+CW/2,P.t+CH+34);
 
   // Historical
