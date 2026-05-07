@@ -348,7 +348,7 @@ class AIPredictor:
         result: Optional[ForecastResult] = None,
         current_dt: Optional[datetime]   = None,
         last_24h_irradiance: Optional[list] = None,
-        height: int = 580,
+        height: int = 620,
     ) -> str:
         """
         Return a self-contained HTML string with the interactive
@@ -505,7 +505,7 @@ function draw(){{
   const [sR,sS]=WINS[month];
   const dpr=window.devicePixelRatio||1;
   const W=cv.parentElement.clientWidth||680;
-  const H=Math.round(W*.44);
+  const H=Math.round(W*.38);
   cv.width=W*dpr; cv.height=H*dpr;
   cv.style.height=H+'px';
   cx.setTransform(dpr,0,0,dpr,0,0);
