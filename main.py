@@ -230,10 +230,6 @@ with st.sidebar:
 zagreb_tz = timezone(timedelta(hours=2))
 now_dt    = datetime.now(zagreb_tz)
 
-# Load history dataframe before using it
-hist = st.session_state.history.df
-
-
 if st.session_state.sim_running:
     s, fc_res = st.session_state.engine.run(
         override=ov, ev_demand_kw=ev_demand, force_bess_charge=force_bess)
@@ -370,12 +366,7 @@ with tabs[0]:
             current_dt=now_dt,
             last_24h_irradiance=last_24h,
         )
-        # --- FIXED: proper height + scroll handling (no cut-off issue) ---
-        components.html(
-            html_panel,
-            height=900,
-            scrolling=False
-        )
+        components.html(html_panel, height=500, scrolling=False)
 
         st.markdown('<p class="sec-hdr">Weather telemetry</p>', unsafe_allow_html=True)
         wc = st.columns(3)
