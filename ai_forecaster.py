@@ -594,14 +594,14 @@ function draw(){{
   [0,200,400,600,800,1000].forEach(v=>{{
     const y=ty(v);
     cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(P.l+CW,y);cx.stroke();
-    cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='right';
+    cx.fillStyle='#ffffff';cx.font='11px system-ui';cx.textAlign='right';
     cx.fillText(v,P.l-6,y+4);
   }});
   for(let h=0;h<=24;h+=3){{
     const x=tx(h);
     cx.strokeStyle='rgba(0,0,0,.07)';cx.lineWidth=.5;
     cx.beginPath();cx.moveTo(x,P.t);cx.lineTo(x,P.t+CH);cx.stroke();
-    cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='center';
+    cx.fillStyle='#ffffff';cx.font='11px system-ui';cx.textAlign='center';
     cx.fillText(String(h).padStart(2,'0')+':00',x,P.t+CH+16);
   }}
 
