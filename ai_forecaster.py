@@ -510,7 +510,7 @@ function draw(){{
   cv.style.height=Hcap+'px';
   cx.setTransform(dpr,0,0,dpr,0,0);
 
-  const P={{t:44,r:20,b:44,l:58}};
+  const P={{t:44,r:20,b:44,l:72}};
   const CW=W-P.l-P.r, CH=H-P.t-P.b;
   const tx=h=>P.l+(h/24)*CW;
   const ty=v=>P.t+CH-(Math.max(-1,v)/1000)*CH;
@@ -595,7 +595,7 @@ function draw(){{
     const y=ty(v);
     cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(P.l+CW,y);cx.stroke();
     cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='right';
-    cx.fillText(v===-1?'0':v,P.l-6,y+4);
+    cx.fillStyle='#1e293b';cx.font='bold 11px system-ui';cx.textAlign='right';cx.fillText(v===-1?'0':v,P.l-14,y+4);
   }});
   for(let h=0;h<=24;h+=3){{
     const x=tx(h);
@@ -606,8 +606,8 @@ function draw(){{
   }}
 
   // Axis labels
-  cx.save();cx.translate(14,P.t+CH/2);cx.rotate(-Math.PI/2);
-  cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='center';
+  cx.save();cx.translate(12,P.t+CH/2);cx.rotate(-Math.PI/2);
+  cx.fillStyle='#374151';cx.font='bold 11px system-ui';cx.textAlign='center';
   cx.fillText('W/m²',0,0);cx.restore();
   cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='center';
   cx.fillText('Hour of day · Zagreb · '+MSHORT[month],P.l+CW/2,P.t+CH+34);
