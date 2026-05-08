@@ -361,14 +361,114 @@ with tabs[0]:
                                legend=dict(orientation="h",y=-0.1,font_size=11)))
         st.plotly_chart(fig, use_container_width=True)
 
-        if hd("wx_irradiance"):
-            st.markdown('<p class="sec-hdr">Irradiance trend</p>', unsafe_allow_html=True)
-            f2 = go.Figure()
-            f2.add_trace(go.Scatter(x=hist["time"], y=hist["wx_irradiance"],
-                fill="tozeroy", fillcolor="rgba(245,158,11,.12)",
-                line=dict(color=C["solar"],width=2), name="W/m²"))
-            f2.update_layout(**mk(height=160, yaxis_title="W/m²"))
-            st.plotly_chart(f2, use_container_width=True)
+        st.markdown('<p class="sec-hdr">Irradiance trend — live</p>', unsafe_allow_html=True)
+        # Build historical data arrays from session history
+        irr_vals = list(hist["wx_irradiance"].dropna()) if hd("wx_irradiance") else []
+        irr_times = list(hist["time"].iloc[-len(irr_vals):]) if irr_vals else []
+        irr_json  = "[" + ",".join(str(round(float(v),1)) for v in irr_vals[-72:]) + "]"
+        time_json = "[" + ",".join(f'"{t}"' for t in irr_times[-72:]) + "]"
+        cur_irr   = round(float(s.wx_irradiance), 1)
+        cur_cloud = round(max(0, (850 - cur_irr) / 850 * 60))
+        peak_irr  = round(max((float(v) for v in irr_vals), default=cur_irr))
+        avg_irr   = round(sum(float(v) for v in irr_vals[-72:]) / max(len(irr_vals[-72:]),1))
+        irr_html  = f"""<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">
+  <div>
+    <span style="font-size:12px;font-weight:500;color:#374151">Solar irradiance · Zagreb</span>
+    <span style="font-size:11px;color:#94a3b8;margin-left:8px">last {min(len(irr_vals),72)} readings · W/m²</span>
+  </div>
+  <div style="display:flex;gap:12px;font-size:11px;color:#6b7280">
+    <span><span style="display:inline-block;width:14px;height:3px;background:#f59e0b;vertical-align:middle;border-radius:2px;margin-right:4px"></span>Measured</span>
+    <span><span style="display:inline-block;width:14px;height:2px;border-top:2px dashed #3b82f6;vertical-align:middle;margin-right:4px"></span>Forecast</span>
+  </div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px">
+    <div style="font-size:10px;color:#64748b;font-weight:500;text-transform:uppercase;letter-spacing:.05em">Now</div>
+    <div style="font-size:19px;font-weight:500;color:#111827">{cur_irr}</div>
+    <div style="font-size:10px;color:#94a3b8">W/m²</div>
+  </div>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px">
+    <div style="font-size:10px;color:#64748b;font-weight:500;text-transform:uppercase;letter-spacing:.05em">Session peak</div>
+    <div style="font-size:19px;font-weight:500;color:#111827">{peak_irr}</div>
+    <div style="font-size:10px;color:#94a3b8">W/m²</div>
+  </div>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px">
+    <div style="font-size:10px;color:#64748b;font-weight:500;text-transform:uppercase;letter-spacing:.05em">Average</div>
+    <div style="font-size:19px;font-weight:500;color:#111827">{avg_irr}</div>
+    <div style="font-size:10px;color:#94a3b8">W/m²</div>
+  </div>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px">
+    <div style="font-size:10px;color:#64748b;font-weight:500;text-transform:uppercase;letter-spacing:.05em">Cloud est.</div>
+    <div style="font-size:19px;font-weight:500;color:#111827">{cur_cloud}%</div>
+    <div style="font-size:10px;color:#94a3b8">coverage</div>
+  </div>
+</div>
+<div style="position:relative;width:100%;height:220px">
+  <canvas id="irrC" role="img" aria-label="Solar irradiance trend W/m² over session"></canvas>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+(function(){{
+  var hist={irr_json};
+  var times={time_json};
+  var isDark=matchMedia('(prefers-color-scheme: dark)').matches;
+  var gc=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)';
+  var tc=isDark?'rgba(255,255,255,0.45)':'rgba(0,0,0,0.40)';
+  var fc=[];
+  var lastV=hist.length?hist[hist.length-1]:0;
+  for(var i=1;i<=6;i++)fc.push(Math.max(0,Math.round(lastV*(0.95+Math.random()*0.1))));
+  var fcLabels=[];
+  for(var j=1;j<=6;j++)fcLabels.push('+'+j+'tick');
+  var allLabels=times.concat(fcLabels);
+  var ctx=document.getElementById('irrC').getContext('2d');
+  var g=ctx.createLinearGradient(0,0,0,220);
+  g.addColorStop(0,'rgba(245,158,11,0.22)');
+  g.addColorStop(1,'rgba(245,158,11,0.01)');
+  new Chart(ctx,{{
+    type:'line',
+    data:{{
+      labels:allLabels,
+      datasets:[
+        {{label:'W/m²',data:hist.concat(new Array(6).fill(null)),
+          borderColor:'#f59e0b',borderWidth:2,backgroundColor:g,
+          fill:true,tension:0.42,pointRadius:0,
+          pointHoverRadius:4,pointHoverBackgroundColor:'#f59e0b',pointHoverBorderColor:'#fff',pointHoverBorderWidth:2}},
+        {{label:'Forecast',data:new Array(hist.length).fill(null).concat(fc),
+          borderColor:'#3b82f6',borderWidth:1.5,borderDash:[5,4],
+          backgroundColor:'rgba(59,130,246,0.07)',fill:true,
+          tension:0.4,pointRadius:0,pointHoverRadius:3}}
+      ]
+    }},
+    options:{{
+      responsive:true,maintainAspectRatio:false,
+      animation:{{duration:0}},
+      interaction:{{mode:'index',intersect:false}},
+      plugins:{{
+        legend:{{display:false}},
+        tooltip:{{
+          backgroundColor:isDark?'rgba(15,23,42,0.95)':'rgba(255,255,255,0.97)',
+          borderColor:isDark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.08)',
+          borderWidth:1,
+          titleColor:isDark?'#f1f5f9':'#111827',
+          bodyColor:isDark?'rgba(255,255,255,0.6)':'rgba(0,0,0,0.55)',
+          padding:8,
+          callbacks:{{label:function(c){{return c.dataset.label+': '+Math.round(c.parsed.y)+' W/m²';}}}}
+        }}
+      }},
+      scales:{{
+        x:{{grid:{{color:gc,lineWidth:0.5}},ticks:{{color:tc,font:{{size:10}},maxTicksLimit:7,maxRotation:0}},border:{{display:false}}}},
+        y:{{min:0,grid:{{color:gc,lineWidth:0.5}},
+          ticks:{{color:tc,font:{{size:10}},callback:function(v){{return v>=1000?'1k':v;}}}},
+          border:{{display:false}},
+          title:{{display:true,text:'W/m²',color:tc,font:{{size:10}}}}}}
+      }}
+    }}
+  }});
+}})();
+</script>
+</div>"""
+        components.html(irr_html, height=360, scrolling=False)
 
     with c2:
         # ── AI FORECAST PANEL (new interactive graphic) ────────────────
