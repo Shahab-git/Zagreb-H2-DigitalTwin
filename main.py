@@ -182,6 +182,19 @@ def hd(col=None):
     if col: return col in hist.columns and hist[col].notna().any()
     return True
 
+def hrow(lbl, val, unit, ok, warn, fmt=".1f"):
+    """Safety tab health matrix row — green/amber/red indicator."""
+    v = float(val)
+    if ok[0] <= v <= ok[1]:       cls, ic = "kpi-green", "●"
+    elif warn[0] <= v <= warn[1]: cls, ic = "kpi-amber", "▲"
+    else:                         cls, ic = "kpi-red",   "✖"
+    st.markdown(
+        f'<div class="health-row">'
+        f'<span style="color:#1e293b;font-size:13px;font-weight:500">{lbl}</span>'
+        f'<span class="kpi-val {cls}" style="font-size:14px">'
+        f'{ic} {v:{fmt}} {unit}</span></div>',
+        unsafe_allow_html=True)
+
 # =============================================================================
 # SIDEBAR
 # =============================================================================
@@ -881,17 +894,6 @@ with tabs[8]:
     c1, c2 = st.columns(2)
     with c1:
         st.markdown('<p class="sec-hdr">System health matrix</p>', unsafe_allow_html=True)
-        def hrow(lbl, val, unit, ok, warn, fmt=".1f"):
-            v = float(val)
-            if ok[0]<=v<=ok[1]:      cls,ic="kpi-green","●"
-            elif warn[0]<=v<=warn[1]: cls,ic="kpi-amber","▲"
-            else:                     cls,ic="kpi-red","✖"
-            st.markdown(
-                f'<div class="health-row">'
-                f'<span style="color:#1e293b;font-size:13px;font-weight:500">{lbl}</span>'
-                f'<span class="kpi-val {cls}" style="font-size:14px">'
-                f'{ic} {v:{fmt}} {unit}</span></div>',
-                unsafe_allow_html=True)
         hrow("BESS SoC",         s.bess_soc_pct,   "%",   (20,90),(10,95))
         hrow("BESS Temperature", s.bess_temp_c,    "°C",  (10,45),(0,55))
         hrow("BESS SoH",         s.bess_soh_pct,   "%",   (85,100),(75,100))
