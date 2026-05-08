@@ -513,7 +513,7 @@ function draw(){{
   const P={{t:44,r:20,b:44,l:58}};
   const CW=W-P.l-P.r, CH=H-P.t-P.b;
   const tx=h=>P.l+(h/24)*CW;
-  const ty=v=>P.t+CH-(v/1150)*CH;
+  const ty=v=>P.t+CH-(Math.max(-1,v)/1000)*CH;
 
   // Sky background
   const skyG=cx.createLinearGradient(0,0,0,H);
@@ -591,11 +591,11 @@ function draw(){{
 
   // Grid
   cx.strokeStyle='rgba(0,0,0,.07)';cx.lineWidth=.5;
-  [0,200,400,600,800,1000,1100].forEach(v=>{{
+  [-1,0,200,400,600,800,1000].forEach(v=>{{
     const y=ty(v);
     cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(P.l+CW,y);cx.stroke();
     cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='right';
-    cx.fillText(v,P.l-6,y+4);
+    cx.fillText(v===-1?'0':v,P.l-6,y+4);
   }});
   for(let h=0;h<=24;h+=3){{
     const x=tx(h);
