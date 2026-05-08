@@ -1,7 +1,37 @@
+# =============================================================================
+# requirements.txt — LUMINIH2 Digital Twin
+# Zagreb, Croatia · Pre-deployment Digital Twin
+# =============================================================================
+#
+# INSTALL:
+#   pip install -r requirements.txt
+#
+# STREAMLIT CLOUD:
+#   Place this file in the repo root alongside main.py.
+#   Streamlit Cloud installs these automatically on deployment.
+#
+# PYTHON VERSION:
+#   Python >= 3.10 required (dataclasses, match statements, type hints)
+# =============================================================================
+
+# ── Core framework ─────────────────────────────────────────────────────────
 streamlit>=1.35.0
+
+# ── Data & numerics ────────────────────────────────────────────────────────
 pandas>=2.0.0
 numpy>=1.26.0
+
+# ── Visualisation ──────────────────────────────────────────────────────────
 plotly>=5.20.0
+
+# ── HTTP / Weather API ─────────────────────────────────────────────────────
 requests>=2.31.0
+
+# ── Timezone handling ──────────────────────────────────────────────────────
 pytz>=2024.1
+
+# ── Streamlit auto-refresh (live simulation tick) ──────────────────────────
+# Required by autorefresh() in shared.py.
+# Falls back to time.sleep + st.rerun() if not installed,
+# but that blocks the server thread — always install for production.
 streamlit-autorefresh>=1.0.1
