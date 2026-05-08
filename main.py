@@ -493,7 +493,7 @@ with tabs[0]:
         current_dt=now_dt,
         last_24h_irradiance=last_24h,
     )
-    components.html(html_panel, height=620, scrolling=False)
+    components.html(html_panel, height=750, scrolling=False)
 
 # ─── TAB 2: PRODUCTION ─────────────────────────────────────────────────────
 with tabs[1]:
