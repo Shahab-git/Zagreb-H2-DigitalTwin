@@ -1,4 +1,3 @@
-
 # =============================================================================
 # ai_forecaster.py — LUMINIH2 AI Solar Irradiance Forecasting Engine
 # Pure-NumPy MLP · No sklearn · Streamlit Cloud safe · Zagreb calibrated
@@ -348,7 +347,7 @@ class AIPredictor:
         result: Optional[ForecastResult] = None,
         current_dt: Optional[datetime]   = None,
         last_24h_irradiance: Optional[list] = None,
-        height: int = 620,
+        height: int = 500,
     ) -> str:
         """
         Return a self-contained HTML string with the interactive
@@ -505,7 +504,7 @@ function draw(){{
   const [sR,sS]=WINS[month];
   const dpr=window.devicePixelRatio||1;
   const W=cv.parentElement.clientWidth||680;
-  const H=Math.round(W*.38);
+  const H=Math.round(W*.50);
   cv.width=W*dpr; cv.height=H*dpr;
   cv.style.height=H+'px';
   cx.setTransform(dpr,0,0,dpr,0,0);
@@ -560,7 +559,7 @@ function draw(){{
 
   // Zagreb skyline
   const baseY=H-32;
-  cx.fillStyle = hour >= sR && hour <= sS ? '#1e293b' : '#0f1623';
+  cx.fillStyle=hour>=sR&&hour<=sS?'#1e293b':'#0f1623';
   cx.beginPath();cx.moveTo(0,H);
   const seg=W/28;
   [0,12,8,18,14,24,30,20,16,10,28,22,16,36,40,34,36,28,20,14,18,24,16,10,14,8,12,0]
@@ -601,7 +600,7 @@ function draw(){{
     const x=tx(h);
     cx.strokeStyle='rgba(0,0,0,.07)';cx.lineWidth=.5;
     cx.beginPath();cx.moveTo(x,P.t);cx.lineTo(x,P.t+CH);cx.stroke();
-    cx.fillStyle='#ffffff';cx.font='11px system-ui';cx.textAlign='center';
+    cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='center';
     cx.fillText(String(h).padStart(2,'0')+':00',x,P.t+CH+16);
   }}
 
@@ -609,7 +608,7 @@ function draw(){{
   cx.save();cx.translate(14,P.t+CH/2);cx.rotate(-Math.PI/2);
   cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='center';
   cx.fillText('W/m²',0,0);cx.restore();
-  cx.fillStyle='#ffffff';cx.font='11px system-ui';cx.textAlign='center';
+  cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='center';
   cx.fillText('Hour of day · Zagreb · '+MSHORT[month],P.l+CW/2,P.t+CH+34);
 
   // Historical
