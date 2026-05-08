@@ -504,9 +504,10 @@ function draw(){{
   const [sR,sS]=WINS[month];
   const dpr=window.devicePixelRatio||1;
   const W=cv.parentElement.clientWidth||680;
-  const H=Math.round(W*.50);
-  cv.width=W*dpr; cv.height=H*dpr;
-  cv.style.height=H+'px';
+  const H=Math.round(W*.38);
+  const Hcap=Math.min(H,480);
+  cv.width=W*dpr; cv.height=Hcap*dpr;
+  cv.style.height=Hcap+'px';
   cx.setTransform(dpr,0,0,dpr,0,0);
 
   const P={{t:44,r:20,b:44,l:58}};
