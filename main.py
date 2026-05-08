@@ -898,7 +898,7 @@ with tabs[8]:
         hrow("Stack SoH",        s.elec_soh_pct,   "%",   (85,100),(75,100))
         hrow("Tank Pressure",    s.pressure_bar,   "bar", (10,550),(10,625))
         hrow("Tank Temperature", s.tank_temp_c,    "°C",  (15,55),(10,65))
-        hrow("H₂ Purity",        s.elec_purity,    "%",   (99.99,100),(99.9,100),".4f")
+        hrow("H₂ Purity",        s.elec_purity,    "%",   (99.95,100),(99.50,100),".4f")
         if sub:
             hrow("Water Quality",sub["water"].resistance_mohm_cm,"MΩ·cm",(10,999),(5,10))
             hrow("H₂ Moisture",  sub["dryer"].moisture_ppm,      "ppm",  (0,5),(0,8),".2f")
