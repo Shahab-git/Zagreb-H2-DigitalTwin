@@ -364,9 +364,10 @@ class BatteryBESS:
         heat_w   = abs(p_actual) * 1000.0 * self.THERMAL_RESISTANCE
         # Passive cooling — Newton's law of cooling
         cooling  = self.COOLING_RATE * (self.temperature_c - ambient_temp_c) * dt_s
-        # Temperature change: heat in minus heat out
-        # Normalised by pack thermal mass (approx 1 Wh/°C per kWh)
-        delta_t  = (heat_w - cooling) / max(self.capacity_kwh * 3.6, 1.0)
+        # Temperature change: (Q_net [W] × dt [s]) / thermal_mass [J/°C]
+        # LFP 100 kWh pack thermal mass ≈ 500,000 J/°C (5 kJ/°C per kWh)
+        thermal_mass_j = self.capacity_kwh * 5000.0   # J/°C
+        delta_t  = (heat_w * dt_s - cooling) / max(thermal_mass_j, 1.0)
         self.temperature_c = float(max(ambient_temp_c,
                                        self.temperature_c + delta_t))
 
