@@ -488,10 +488,15 @@ with tabs[0]:
     fc_res   = st.session_state.last_fc
     last_24h = list(hist["wx_irradiance"].tail(24)) \
                if hd("wx_irradiance") else None
+    # Regenerate forecast with 6-hour horizon for the panel
+    if last_24h and len(last_24h) >= 6:
+        fc_res = st.session_state.forecaster.predict_future(
+            last_24h, horizon_hours=6, current_dt=now_dt)
     html_panel = st.session_state.forecaster.render_panel(
         result=fc_res,
         current_dt=now_dt,
         last_24h_irradiance=last_24h,
+        height=850,
     )
     components.html(html_panel, height=850, scrolling=False)
 
