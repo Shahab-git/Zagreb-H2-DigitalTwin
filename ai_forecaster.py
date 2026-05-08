@@ -505,7 +505,7 @@ function draw(){{
   const dpr=window.devicePixelRatio||1;
   const W=cv.parentElement.clientWidth||680;
   const H=Math.round(W*.38);
-  const Hcap=Math.min(H,480);
+  const Hcap=Math.min(H,580);
   cv.width=W*dpr; cv.height=Hcap*dpr;
   cv.style.height=Hcap+'px';
   cx.setTransform(dpr,0,0,dpr,0,0);
@@ -513,7 +513,7 @@ function draw(){{
   const P={{t:44,r:20,b:44,l:58}};
   const CW=W-P.l-P.r, CH=H-P.t-P.b;
   const tx=h=>P.l+(h/24)*CW;
-  const ty=v=>P.t+CH-(v/1100)*CH;
+  const ty=v=>P.t+CH-(v/1150)*CH;
 
   // Sky background
   const skyG=cx.createLinearGradient(0,0,0,H);
@@ -591,7 +591,7 @@ function draw(){{
 
   // Grid
   cx.strokeStyle='rgba(0,0,0,.07)';cx.lineWidth=.5;
-  [0,200,400,600,800,1000].forEach(v=>{{
+  [0,200,400,600,800,1000,1100].forEach(v=>{{
     const y=ty(v);
     cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(P.l+CW,y);cx.stroke();
     cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='right';
