@@ -346,8 +346,9 @@ tabs = st.tabs([
 
 # ─── TAB 1: ACQUISITION ────────────────────────────────────────────────────
 with tabs[0]:
-    c1, c2 = st.columns(2)
-    with c1:
+    # ── Row 1: generation mix + weather side by side ─────────────────
+    r1a, r1b = st.columns([1, 2])
+    with r1a:
         st.markdown('<p class="sec-hdr">Live generation mix</p>', unsafe_allow_html=True)
         fig = go.Figure(go.Pie(
             values=[max(.01,s.solar_kw), max(.01,s.wind_kw), max(.01,s.grid_import_kw)],
@@ -357,7 +358,7 @@ with tabs[0]:
         fig.add_annotation(text=f"<b>{s.total_gen_kw:.1f}</b><br>kW",
                            showarrow=False, font=dict(size=14,color="#111827"),
                            x=0.5, y=0.5, xref="paper", yref="paper")
-        fig.update_layout(**mk(height=240, showlegend=True,
+        fig.update_layout(**mk(height=220, showlegend=True,
                                legend=dict(orientation="h",y=-0.1,font_size=11)))
         st.plotly_chart(fig, use_container_width=True)
 
@@ -470,20 +471,7 @@ with tabs[0]:
 </div>"""
         components.html(irr_html, height=360, scrolling=False)
 
-    with c2:
-        # ── AI FORECAST PANEL (new interactive graphic) ────────────────
-        st.markdown('<p class="sec-hdr">AI solar forecast — Zagreb skyline panel</p>',
-                    unsafe_allow_html=True)
-        fc       = st.session_state.last_fc
-        last_24h = list(hist["wx_irradiance"].tail(24)) \
-                   if hd("wx_irradiance") else None
-        html_panel = st.session_state.forecaster.render_panel(
-            result=fc,
-            current_dt=now_dt,
-            last_24h_irradiance=last_24h,
-        )
-        components.html(html_panel, height=600, scrolling=False)
-
+    with r1b:
         st.markdown('<p class="sec-hdr">Weather telemetry</p>', unsafe_allow_html=True)
         wc = st.columns(3)
         wc[0].metric("Temperature", f"{s.wx_temp_c:.1f}°C")
@@ -493,6 +481,19 @@ with tabs[0]:
         wc2[0].metric("Irradiance", f"{s.wx_irradiance:.0f} W/m²")
         wc2[1].metric("Soiling",    f"{s.wx_soiling:.3f}")
         wc2[2].metric("Precip",     f"{s.wx_precip_mm:.1f} mm")
+
+    # ── Row 2: AI forecast panel FULL WIDTH ────────────────────────────
+    st.markdown('<p class="sec-hdr">AI solar forecast — Zagreb skyline panel</p>',
+                unsafe_allow_html=True)
+    fc_res   = st.session_state.last_fc
+    last_24h = list(hist["wx_irradiance"].tail(24)) \
+               if hd("wx_irradiance") else None
+    html_panel = st.session_state.forecaster.render_panel(
+        result=fc_res,
+        current_dt=now_dt,
+        last_24h_irradiance=last_24h,
+    )
+    components.html(html_panel, height=620, scrolling=False)
 
 # ─── TAB 2: PRODUCTION ─────────────────────────────────────────────────────
 with tabs[1]:
