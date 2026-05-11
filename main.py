@@ -697,13 +697,11 @@ with tabs[2]:
     comp_arrow = "→" if s.compressor_on else "⊘"
     comp_arrow_col = "#22c55e" if s.compressor_on else "#94a3b8"
 
-    st.markdown(f"""
+    _flow_html = f"""<!DOCTYPE html><html><body style="margin:0;padding:0;font-family:-apple-system,sans-serif">
 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;
   padding:20px 24px;margin-bottom:4px">
   <div style="display:grid;grid-template-columns:1fr 48px 1fr 48px 1fr 48px 1fr;
     align-items:center;gap:0">
-
-    <!-- Buffer tank -->
     <div style="text-align:center">
       <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
         letter-spacing:.06em;margin-bottom:8px">Buffer Tank</div>
@@ -721,13 +719,9 @@ with tabs[2]:
         {s.buffer_pct/100*Config.BUFFER_TANK_CAPACITY_KG:.3f} kg
       </div>
     </div>
-
-    <!-- Arrow to compressor -->
     <div style="text-align:center;font-size:24px;color:{comp_arrow_col};font-weight:700">
       {comp_arrow}
     </div>
-
-    <!-- Compressor -->
     <div style="text-align:center">
       <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
         letter-spacing:.06em;margin-bottom:8px">HCS-100</div>
@@ -746,13 +740,9 @@ with tabs[2]:
         {Config.compressor.outlet_nom_bar:.0f} bar outlet
       </div>
     </div>
-
-    <!-- Arrow to main tank -->
     <div style="text-align:center;font-size:24px;color:{comp_arrow_col};font-weight:700">
       {comp_arrow}
     </div>
-
-    <!-- Main tank -->
     <div style="text-align:center">
       <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
         letter-spacing:.06em;margin-bottom:8px">TH540-50</div>
@@ -770,11 +760,7 @@ with tabs[2]:
         {main_kg:.3f} / {Config.MAIN_TANK_CAPACITY_KG} kg usable
       </div>
     </div>
-
-    <!-- Arrow to HRS -->
     <div style="text-align:center;font-size:24px;color:#0ea5e9;font-weight:700">→</div>
-
-    <!-- HRS station -->
     <div style="text-align:center">
       <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
         letter-spacing:.06em;margin-bottom:8px">HRS Station</div>
@@ -794,8 +780,6 @@ with tabs[2]:
     </div>
 
   </div>
-
-  <!-- Bottom info bar -->
   <div style="display:flex;justify-content:space-between;margin-top:14px;
     padding-top:12px;border-top:1px solid #e2e8f0;flex-wrap:wrap;gap:8px">
     <span style="font-size:12px;color:#374151">
@@ -813,7 +797,8 @@ with tabs[2]:
       <b>Tank temperature:</b> {s.tank_temp_c:.1f}°C
     </span>
   </div>
-</div>""", unsafe_allow_html=True)
+</div></body></html>"""
+    components.html(_flow_html, height=220, scrolling=False)
 
     # ── 3. BESS SoC trend + H₂ tank trends ────────────────────────────────
     s3a, s3b = st.columns(2)
