@@ -1208,20 +1208,27 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
                     max(.001, s.heat_kw),
                     max(.001, s.fc_kw)],
             labels=["EV Charging", "Grid Export", "Heat Recovery", "Fuel Cell"],
-            hole=0.58,
+            hole=0.55,
             marker=dict(
                 colors=[C["ev"], C["grid"], C["solar"], C["bess"]],
                 line=dict(color="#ffffff", width=2)),
+            # Always show labels outside so they are never hidden
+            textposition="outside",
             textinfo="label+percent",
-            textfont=dict(color="#111827", size=11),
-            hovertemplate="%{label}: %{value:.3f} kW<extra></extra>"))
+            textfont=dict(color="#111827", size=12, family="'Segoe UI',sans-serif"),
+            # Pull each slice slightly so outside labels have space
+            pull=[0.04, 0.04, 0.04, 0.04],
+            # Show all labels regardless of slice size
+            automargin=True,
+            direction="clockwise",
+            hovertemplate="<b>%{label}</b><br>%{value:.3f} kW<br>%{percent}<extra></extra>"))
         f16.add_annotation(
             text=f"<b>{s.fc_kw + s.ev_kw + s.grid_export_kw + s.heat_kw:.2f}</b><br>kW total",
-            showarrow=False, font=dict(size=12, color="#111827"),
+            showarrow=False, font=dict(size=13, color="#111827"),
             x=0.5, y=0.5, xref="paper", yref="paper")
-        f16.update_layout(**mk(height=210,
-            legend=dict(orientation="h", y=-0.12, font_size=10),
-            margin=dict(t=10, b=40, l=10, r=10)))
+        f16.update_layout(**mk(height=270,
+            showlegend=False,
+            margin=dict(t=30, b=30, l=80, r=80)))
         st.plotly_chart(f16, use_container_width=True)
 
 # ─── TAB 5: SUBSYSTEMS ─────────────────────────────────────────────────────
@@ -2429,14 +2436,3 @@ try:
     st_autorefresh(interval=refresh*1000, key="lumi_v42_r")
 except ImportError:
     import time; time.sleep(refresh); st.rerun()
-
-
-
-
-
-
-
-
-
-
-
