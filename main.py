@@ -652,60 +652,300 @@ with tabs[1]:
 
 # ─── TAB 3: STORAGE ────────────────────────────────────────────────────────
 with tabs[2]:
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown('<p class="sec-hdr">BESS state of charge</p>', unsafe_allow_html=True)
-        f9 = go.Figure(go.Indicator(
-            mode="gauge+number+delta", value=s.bess_soc_pct,
-            delta={"reference":55.0,"valueformat":".1f"},
-            title={"text":"SoC (%)","font":{"color":"#111827"}},
-            number={"font":{"color":"#111827"}},
-            gauge={"axis":{"range":[0,100],"tickcolor":"#374151"},
-                   "bar":{"color":C["bess"]},"bgcolor":"#f8fafc",
-                   "steps":[{"range":[0,Config.BATT_SOC_MIN*100],"color":"#fee2e2"},
-                             {"range":[Config.BATT_SOC_MIN*100,Config.BATT_SOC_MAX*100],"color":"#dcfce7"}],
-                   "threshold":{"line":{"color":C["fc"],"width":2},"value":Config.BATT_SOC_MIN*100}}))
-        f9.update_layout(**mk(height=230))
-        st.plotly_chart(f9, use_container_width=True)
 
+    # ── 1. KPI strip ───────────────────────────────────────────────────────
+    sk = st.columns(5)
+    bess_cls  = "kpi-green" if s.bess_soc_pct > 30 else "kpi-amber" if s.bess_soc_pct > 15 else "kpi-red"
+    temp_cls  = "kpi-green" if s.bess_temp_c < 45 else "kpi-amber" if s.bess_temp_c < 55 else "kpi-red"
+    tank_cls  = "kpi-cyan"  if s.main_tank_pct > 40 else "kpi-amber" if s.main_tank_pct > 10 else "kpi-red"
+    pres_cls  = "kpi-blue"  if s.pressure_bar < Config.SAFETY_MAX_PRESSURE_BAR * 0.80 else "kpi-amber"
+    comp_cls2 = "kpi-green" if s.compressor_on else "kpi-gray"
+    kpi(sk[0], "BESS SoC",       f"{s.bess_soc_pct:.1f}%",
+        f"SoH {s.bess_soh_pct:.1f}% · {s.bess_temp_c:.1f}°C", bess_cls)
+    kpi(sk[1], "BESS Temperature", f"{s.bess_temp_c:.1f}°C",
+        "✅ Normal" if s.bess_temp_c < 45 else "⚠ Elevated" if s.bess_temp_c < 55 else "🔥 Critical",
+        temp_cls)
+    kpi(sk[2], "Main Tank",      f"{s.main_tank_pct:.1f}%",
+        f"{s.main_tank_pct/100*Config.MAIN_TANK_CAPACITY_KG:.2f} / {Config.MAIN_TANK_CAPACITY_KG} kg",
+        tank_cls)
+    kpi(sk[3], "Tank Pressure",  f"{s.pressure_bar:.0f} bar",
+        f"Max {Config.SAFETY_MAX_PRESSURE_BAR:.0f} bar (MWP)", pres_cls)
+    kpi(sk[4], "Compressor HCS-100",
+        "● ON" if s.compressor_on else "○ STANDBY",
+        f"Tank {s.tank_temp_c:.1f}°C", comp_cls2)
+
+    # ── 2. H₂ chain flow diagram — full width ──────────────────────────────
+    st.markdown('<p class="sec-hdr">H₂ storage chain — live flow</p>', unsafe_allow_html=True)
+
+    # Calculate days-to-full and hours-to-empty
+    h2_rate_kg_h = s.h2_kg_h
+    main_kg      = s.main_tank_pct / 100 * Config.MAIN_TANK_CAPACITY_KG
+    remaining_kg = Config.MAIN_TANK_CAPACITY_KG * 0.9 - main_kg
+    days_to_full = (remaining_kg / max(h2_rate_kg_h * 24 * 0.6, 0.001)
+                    if remaining_kg > 0 else 0.0)
+    hrs_to_empty = (main_kg / max(h2_rate_kg_h, 0.001)
+                    if main_kg > 0 else 0.0)
+
+    def _tank_color(pct):
+        if pct >= 60: return "#22c55e"
+        if pct >= 20: return "#f59e0b"
+        return "#ef4444"
+
+    buf_col  = _tank_color(s.buffer_pct)
+    main_col = _tank_color(s.main_tank_pct)
+    hrs_col  = _tank_color(s.hrs_pct)
+    comp_arrow = "→" if s.compressor_on else "⊘"
+    comp_arrow_col = "#22c55e" if s.compressor_on else "#94a3b8"
+
+    st.markdown(f"""
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;
+  padding:20px 24px;margin-bottom:4px">
+  <div style="display:grid;grid-template-columns:1fr 48px 1fr 48px 1fr 48px 1fr;
+    align-items:center;gap:0">
+
+    <!-- Buffer tank -->
+    <div style="text-align:center">
+      <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
+        letter-spacing:.06em;margin-bottom:8px">Buffer Tank</div>
+      <div style="background:#e2e8f0;border-radius:8px;height:90px;position:relative;
+        overflow:hidden;border:2px solid {buf_col}">
+        <div style="position:absolute;bottom:0;left:0;right:0;
+          background:{buf_col};opacity:.25;height:{s.buffer_pct}%"></div>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;
+          align-items:center;justify-content:center">
+          <span style="font-size:22px;font-weight:700;color:#111827">{s.buffer_pct:.0f}%</span>
+          <span style="font-size:10px;color:#64748b">20 bar · 0.5 kg cap</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">
+        {s.buffer_pct/100*Config.BUFFER_TANK_CAPACITY_KG:.3f} kg
+      </div>
+    </div>
+
+    <!-- Arrow to compressor -->
+    <div style="text-align:center;font-size:24px;color:{comp_arrow_col};font-weight:700">
+      {comp_arrow}
+    </div>
+
+    <!-- Compressor -->
+    <div style="text-align:center">
+      <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
+        letter-spacing:.06em;margin-bottom:8px">HCS-100</div>
+      <div style="background:{"#dcfce7" if s.compressor_on else "#f1f5f9"};
+        border:2px solid {"#22c55e" if s.compressor_on else "#e2e8f0"};
+        border-radius:8px;height:90px;display:flex;flex-direction:column;
+        align-items:center;justify-content:center">
+        <span style="font-size:28px">{"⚙" if s.compressor_on else "○"}</span>
+        <span style="font-size:12px;font-weight:600;
+          color:{"#15803d" if s.compressor_on else "#94a3b8"}">
+          {"RUNNING" if s.compressor_on else "STANDBY"}
+        </span>
+        <span style="font-size:10px;color:#64748b">2.7 kW · 2 kg/day</span>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">
+        {Config.compressor.outlet_nom_bar:.0f} bar outlet
+      </div>
+    </div>
+
+    <!-- Arrow to main tank -->
+    <div style="text-align:center;font-size:24px;color:{comp_arrow_col};font-weight:700">
+      {comp_arrow}
+    </div>
+
+    <!-- Main tank -->
+    <div style="text-align:center">
+      <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
+        letter-spacing:.06em;margin-bottom:8px">TH540-50</div>
+      <div style="background:#e2e8f0;border-radius:8px;height:90px;position:relative;
+        overflow:hidden;border:2px solid {main_col}">
+        <div style="position:absolute;bottom:0;left:0;right:0;
+          background:{main_col};opacity:.25;height:{s.main_tank_pct}%"></div>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;
+          align-items:center;justify-content:center">
+          <span style="font-size:22px;font-weight:700;color:#111827">{s.main_tank_pct:.0f}%</span>
+          <span style="font-size:10px;color:#64748b">{s.pressure_bar:.0f} bar</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">
+        {main_kg:.3f} / {Config.MAIN_TANK_CAPACITY_KG} kg usable
+      </div>
+    </div>
+
+    <!-- Arrow to HRS -->
+    <div style="text-align:center;font-size:24px;color:#0ea5e9;font-weight:700">→</div>
+
+    <!-- HRS station -->
+    <div style="text-align:center">
+      <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
+        letter-spacing:.06em;margin-bottom:8px">HRS Station</div>
+      <div style="background:#e2e8f0;border-radius:8px;height:90px;position:relative;
+        overflow:hidden;border:2px solid {hrs_col}">
+        <div style="position:absolute;bottom:0;left:0;right:0;
+          background:{hrs_col};opacity:.25;height:{s.hrs_pct}%"></div>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;
+          align-items:center;justify-content:center">
+          <span style="font-size:22px;font-weight:700;color:#111827">{s.hrs_pct:.0f}%</span>
+          <span style="font-size:10px;color:#64748b">⛽ 5 kg capacity</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">
+        {s.hrs_pct/100*Config.HRS_H2_TANK_CAPACITY_KG:.3f} kg ready
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom info bar -->
+  <div style="display:flex;justify-content:space-between;margin-top:14px;
+    padding-top:12px;border-top:1px solid #e2e8f0;flex-wrap:wrap;gap:8px">
+    <span style="font-size:12px;color:#374151">
+      <b>Days to full tank:</b>
+      {"Tank full ✅" if days_to_full <= 0 else f"{days_to_full:.1f} days at current rate"}
+    </span>
+    <span style="font-size:12px;color:#374151">
+      <b>H₂ flow rate:</b> {h2_rate_kg_h*1000:.2f} g/h → compressor
+    </span>
+    <span style="font-size:12px;color:#374151">
+      <b>Leak status:</b>
+      {"⚠ LEAK DETECTED" if s.leak_detected else "✅ No leak detected"}
+    </span>
+    <span style="font-size:12px;color:#374151">
+      <b>Tank temperature:</b> {s.tank_temp_c:.1f}°C
+    </span>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+    # ── 3. BESS SoC trend + H₂ tank trends ────────────────────────────────
+    s3a, s3b = st.columns(2)
+    with s3a:
+        st.markdown('<p class="sec-hdr">BESS — SoC history & gauge</p>', unsafe_allow_html=True)
+        sc3a_inner = st.columns([1, 1])
+        with sc3a_inner[0]:
+            f9 = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=s.bess_soc_pct,
+                title={"text":"SoC (%)","font":{"color":"#111827","size":13}},
+                number={"font":{"color":"#111827","size":28}},
+                gauge={"axis":{"range":[0,100],"tickcolor":"#374151"},
+                       "bar":{"color":C["bess"]},"bgcolor":"#f8fafc",
+                       "steps":[
+                           {"range":[0, Config.BATT_SOC_MIN*100],          "color":"#fee2e2"},
+                           {"range":[Config.BATT_SOC_MIN*100,
+                                     Config.BATT_SOC_MAX*100],             "color":"#dcfce7"},
+                           {"range":[Config.BATT_SOC_MAX*100, 100],        "color":"#fef9c3"},
+                       ],
+                       "threshold":{"line":{"color":C["fc"],"width":2},
+                                    "value":Config.BATT_SOC_MIN*100}}))
+            f9.update_layout(**mk(height=200, margin=dict(t=20,b=10,l=20,r=20)))
+            st.plotly_chart(f9, use_container_width=True)
+        with sc3a_inner[1]:
+            if hd("bess_soc_pct"):
+                f9b = go.Figure()
+                f9b.add_trace(go.Scatter(
+                    x=hist["time"], y=hist["bess_soc_pct"],
+                    fill="tozeroy", fillcolor="rgba(34,197,94,.10)",
+                    line=dict(color=C["bess"], width=2), name="SoC %",
+                    hovertemplate="%{y:.1f}%<extra>SoC</extra>"))
+                f9b.add_hline(y=Config.BATT_SOC_MIN*100, line_dash="dot",
+                    line_color=C["fc"], line_width=1.2,
+                    annotation_text=f"Min {Config.BATT_SOC_MIN*100:.0f}%",
+                    annotation_font_size=10, annotation_font_color=C["fc"])
+                f9b.add_hline(y=Config.BATT_SOC_MAX*100, line_dash="dot",
+                    line_color="#94a3b8", line_width=1.2,
+                    annotation_text=f"Max {Config.BATT_SOC_MAX*100:.0f}%",
+                    annotation_font_size=10)
+                f9b.update_layout(**mk(height=200,
+                    yaxis_title="%", yaxis=dict(range=[0,105]),
+                    margin=dict(t=20,b=10,l=44,r=10)))
+                st.plotly_chart(f9b, use_container_width=True)
+
+        # BESS temperature with zone shading
         if hd("bess_temp_c"):
-            st.markdown('<p class="sec-hdr">BESS temperature</p>', unsafe_allow_html=True)
+            st.markdown('<p class="sec-hdr">BESS temperature — thermal zones</p>',
+                        unsafe_allow_html=True)
             f10 = go.Figure()
-            f10.add_trace(go.Scatter(x=hist["time"], y=hist["bess_temp_c"],
-                line=dict(color=C["fc"],width=2), name="°C"))
-            f10.add_hline(y=55, line_dash="dash", line_color=C["solar"], annotation_text="⚠ 55°C")
+            # Danger zone shading
+            f10.add_hrect(y0=55, y1=Config.THERMAL_RUNAWAY_TEMP,
+                fillcolor="rgba(239,68,68,.08)", line_width=0,
+                annotation_text="⚠ Warning zone", annotation_font_size=10,
+                annotation_font_color="#b91c1c")
+            f10.add_hrect(y0=Config.THERMAL_RUNAWAY_TEMP, y1=100,
+                fillcolor="rgba(239,68,68,.18)", line_width=0,
+                annotation_text="🔥 Runaway zone", annotation_font_size=10,
+                annotation_font_color="#7f1d1d")
+            f10.add_trace(go.Scatter(
+                x=hist["time"], y=hist["bess_temp_c"],
+                fill="tozeroy", fillcolor="rgba(239,68,68,.06)",
+                line=dict(color=C["fc"], width=2), name="°C",
+                hovertemplate="%{y:.1f}°C<extra>BESS temp</extra>"))
+            f10.add_hline(y=55, line_dash="dash", line_color=C["solar"],
+                line_width=1.5, annotation_text="55°C",
+                annotation_font_color=C["solar"], annotation_font_size=10)
             f10.add_hline(y=Config.THERMAL_RUNAWAY_TEMP, line_dash="dash",
-                line_color=C["fc"], annotation_text="🔥 Runaway")
-            f10.update_layout(**mk(height=170, yaxis_title="°C"))
+                line_color=C["fc"], line_width=1.5,
+                annotation_text=f"{Config.THERMAL_RUNAWAY_TEMP}°C",
+                annotation_font_color=C["fc"], annotation_font_size=10)
+            f10.update_layout(**mk(height=190,
+                yaxis_title="°C", yaxis=dict(range=[15, 75])))
             st.plotly_chart(f10, use_container_width=True)
 
-    with c2:
-        st.markdown('<p class="sec-hdr">Hydrogen tank levels</p>', unsafe_allow_html=True)
-        f11 = go.Figure(go.Bar(
-            x=["Buffer","Main Tank\n(TH540-50)","HRS Station"],
-            y=[s.buffer_pct, s.main_tank_pct, s.hrs_pct],
-            marker_color=[C["h2"],C["elec"],C["bess"]], marker_line_width=0,
-            text=[f"{v:.1f}%" for v in [s.buffer_pct,s.main_tank_pct,s.hrs_pct]],
-            textposition="outside", textfont=dict(color="#111827")))
-        f11.update_layout(**mk(height=230, yaxis_range=[0,115], yaxis_title="%"))
-        st.plotly_chart(f11, use_container_width=True)
+    with s3b:
+        st.markdown('<p class="sec-hdr">H₂ tank levels — live trend</p>', unsafe_allow_html=True)
+        if hd("main_tank_pct"):
+            f11 = go.Figure()
+            for col_name, label, col_color, fill_col in [
+                ("buffer_pct",    "Buffer (20 bar)",    C["h2"],   "rgba(14,165,233,.10)"),
+                ("main_tank_pct", "Main Tank TH540-50", C["elec"], "rgba(139,92,246,.10)"),
+                ("hrs_pct",       "HRS Station",        C["bess"], "rgba(34,197,94,.10)"),
+            ]:
+                if col_name in hist.columns:
+                    f11.add_trace(go.Scatter(
+                        x=hist["time"], y=hist[col_name],
+                        fill="tozeroy", fillcolor=fill_col,
+                        line=dict(color=col_color, width=2), name=label,
+                        hovertemplate=f"%{{y:.1f}}%<extra>{label}</extra>"))
+            f11.update_layout(**mk(height=230,
+                yaxis_title="%", yaxis=dict(range=[0,108]),
+                legend=dict(orientation="h", y=1.1, font_size=10)))
+            st.plotly_chart(f11, use_container_width=True)
 
+        # Pressure gauge
+        st.markdown('<p class="sec-hdr">Main tank pressure</p>', unsafe_allow_html=True)
         f12 = go.Figure(go.Indicator(
             mode="gauge+number", value=s.pressure_bar,
-            title={"text":"Main Tank Pressure (bar)","font":{"color":"#111827"}},
-            number={"font":{"color":"#111827"}},
-            gauge={"axis":{"range":[0,Config.SAFETY_MAX_PRESSURE_BAR],"tickcolor":"#374151"},
-                   "bar":{"color":C["wind"]},"bgcolor":"#f8fafc",
+            title={"text":"Pressure (bar)","font":{"color":"#111827","size":13}},
+            number={"font":{"color":"#111827","size":28},
+                    "suffix":" bar"},
+            gauge={"axis":{"range":[0, Config.SAFETY_MAX_PRESSURE_BAR],
+                           "tickcolor":"#374151"},
+                   "bar":{"color":C["wind"]}, "bgcolor":"#f8fafc",
+                   "steps":[
+                       {"range":[0, Config.MIN_OPERATING_PRESSURE_BAR*3], "color":"#fef9c3"},
+                       {"range":[Config.MIN_OPERATING_PRESSURE_BAR*3,
+                                 Config.SAFETY_MAX_PRESSURE_BAR*0.85],    "color":"#dcfce7"},
+                       {"range":[Config.SAFETY_MAX_PRESSURE_BAR*0.85,
+                                 Config.SAFETY_MAX_PRESSURE_BAR],         "color":"#fee2e2"},
+                   ],
                    "threshold":{"line":{"color":C["fc"],"width":2},
                                 "value":Config.SAFETY_MAX_PRESSURE_BAR*0.90}}))
-        f12.update_layout(**mk(height=170))
+        f12.update_layout(**mk(height=200, margin=dict(t=20,b=10,l=20,r=20)))
         st.plotly_chart(f12, use_container_width=True)
 
-        comp_cls = "badge-green" if s.compressor_on else "badge-amber"
+        # Days to full + hours to empty info cards
         st.markdown(
-            f'<span style="color:#374151;font-size:13px;font-weight:500">Compressor HCS-100: </span>'
-            f'<span class="badge {comp_cls}">{"● ON" if s.compressor_on else "○ STANDBY"}</span>'
-            f'<span style="color:#374151;font-size:13px"> | Tank {s.tank_temp_c:.1f}°C</span>',
+            f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">'
+            f'<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 12px">'
+            f'<div style="font-size:10px;font-weight:600;color:#15803d;text-transform:uppercase">Days to full (90%)</div>'
+            f'<div style="font-size:20px;font-weight:700;color:#111827;margin:2px 0">'
+            f'{"Full ✅" if days_to_full <= 0 else f"{days_to_full:.1f} d"}</div>'
+            f'<div style="font-size:10px;color:#64748b">at {h2_rate_kg_h*1000:.1f} g/h rate</div>'
+            f'</div>'
+            f'<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px 12px">'
+            f'<div style="font-size:10px;font-weight:600;color:#1d4ed8;text-transform:uppercase">Hours of H₂ stored</div>'
+            f'<div style="font-size:20px;font-weight:700;color:#111827;margin:2px 0">'
+            f'{hrs_to_empty:.0f} h</div>'
+            f'<div style="font-size:10px;color:#64748b">at FC nominal draw</div>'
+            f'</div></div>',
             unsafe_allow_html=True)
 
 # ─── TAB 4: DISTRIBUTION ───────────────────────────────────────────────────
