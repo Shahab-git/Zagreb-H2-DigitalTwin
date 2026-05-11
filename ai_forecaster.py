@@ -439,7 +439,15 @@ canvas{{display:block;width:100%;cursor:crosshair}}
     </div>
   </div>
 
-  <canvas id="cv"></canvas>
+  <div id="canvasWrap" style="width:100%;height:460px;min-height:200px;max-height:800px;
+  resize:vertical;overflow:hidden;cursor:ns-resize;border-bottom:3px solid #e2e8f0;
+  box-sizing:border-box;position:relative" title="Drag bottom edge to resize">
+  <canvas id="cv" style="display:block;width:100%;height:100%"></canvas>
+  <div style="position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
+    font-size:10px;color:#94a3b8;pointer-events:none;user-select:none">
+    ⟷ drag to resize
+  </div>
+</div>
 
   <div class="ctrl-bar">
     <div class="cl">
@@ -503,11 +511,11 @@ function draw(){{
   const {{month,hour,cloud,hz}}=st();
   const [sR,sS]=WINS[month];
   const dpr=window.devicePixelRatio||1;
-  const W=cv.parentElement.clientWidth||680;
-  const H=Math.round(W*.38);
-  const Hcap=Math.min(H,580);
-  cv.width=W*dpr; cv.height=Hcap*dpr;
-  cv.style.height=Hcap+'px';
+  const wrap=document.getElementById('canvasWrap');
+  const W=wrap.clientWidth||680;
+  const H=wrap.clientHeight||420;
+  cv.width=W*dpr; cv.height=H*dpr;
+  cv.style.width='100%'; cv.style.height='100%';
   cx.setTransform(dpr,0,0,dpr,0,0);
 
   const P={{t:44,r:20,b:44,l:72}};
@@ -751,7 +759,10 @@ document.getElementById('sMon').addEventListener('change',upd);
 document.getElementById('sHr').addEventListener('input',upd);
 document.getElementById('sCl').addEventListener('input',upd);
 document.getElementById('sHz').addEventListener('input',upd);
-window.addEventListener('resize',draw);
+if(window.ResizeObserver){{
+  new ResizeObserver(function(){{draw();}}).observe(document.getElementById('canvasWrap'));
+}}
+window.addEventListener('resize',function(){{setTimeout(draw,60);}});
 draw();
 </script>
 </body>
