@@ -107,16 +107,41 @@ section[data-testid="stSidebar"] small{color:#374151 !important}
 # PLOTLY WHITE TEMPLATE
 # =============================================================================
 PLOT = dict(
-    template="plotly_white", paper_bgcolor="#ffffff",
-    plot_bgcolor="#f8fafc", font_color="#111827",
+    template="plotly_white",
+    paper_bgcolor="#ffffff",
+    plot_bgcolor="#f8fafc",
+    font_color="#111827",
+    font=dict(color="#111827", size=12,
+              family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"),
     margin=dict(t=28, b=28, l=44, r=16),
+)
+
+_AX = dict(
+    tickfont=dict(color="#111827", size=12),
+    title_font=dict(color="#111827", size=12),
+    tickcolor="#374151",
+    linecolor="#e2e8f0",
+    gridcolor="rgba(0,0,0,0.05)",
+    zerolinecolor="rgba(0,0,0,0.08)",
 )
 C = dict(
     solar="#f59e0b", wind="#3b82f6", bess="#22c55e", elec="#8b5cf6",
     h2="#0ea5e9", fc="#ef4444", grid="#94a3b8", ev="#60a5fa",
     co2="#22c55e", water="#3b82f6", o2="#f59e0b",
 )
-def mk(**kw): return {**PLOT, **kw}
+def mk(**kw):
+    """Build Plotly layout — enforces black axis labels on every chart."""
+    base = {**PLOT}
+    # Inject black axis style; caller overrides take precedence
+    for ax_key in ("xaxis", "yaxis", "xaxis2", "yaxis2"):
+        if ax_key in kw:
+            caller = kw.pop(ax_key)
+            base[ax_key] = {**_AX, **caller,
+                "tickfont":  caller.get("tickfont",  _AX["tickfont"]),
+                "title_font":caller.get("title_font",_AX["title_font"])}
+        else:
+            base[ax_key] = {**_AX}
+    return {**base, **kw}
 
 # =============================================================================
 # STARTUP
@@ -415,7 +440,7 @@ with tabs[0]:
   var times={time_json};
   var isDark=matchMedia('(prefers-color-scheme: dark)').matches;
   var gc=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)';
-  var tc=isDark?'rgba(255,255,255,0.45)':'rgba(0,0,0,0.40)';
+  var tc=isDark?'rgba(255,255,255,0.85)':'#111827';
   var fc=[];
   var lastV=hist.length?hist[hist.length-1]:0;
   for(var i=1;i<=6;i++)fc.push(Math.max(0,Math.round(lastV*(0.95+Math.random()*0.1))));
