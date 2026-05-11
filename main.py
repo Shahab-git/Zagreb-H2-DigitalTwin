@@ -2056,37 +2056,134 @@ with tabs[7]:
                 xaxis_title="€/kg",yaxis_title="Count",showlegend=False))
             st.plotly_chart(fig_l, use_container_width=True)
 
-            st.markdown('<p class="sec-hdr">Full probabilistic summary</p>',
+            st.markdown('<p class="sec-hdr">Full probabilistic summary — P10 / P50 / P90</p>',
                         unsafe_allow_html=True)
-            rows = [
-                ("Annual H₂",        f"{unc.annual_h2_kg.p10:.0f}",       f"{unc.annual_h2_kg.p50:.0f}",       f"{unc.annual_h2_kg.p90:.0f}",       "kg/yr"),
-                ("Daily H₂",         f"{unc.daily_h2_g.p10:.0f}",         f"{unc.daily_h2_g.p50:.0f}",         f"{unc.daily_h2_g.p90:.0f}",         "g/day"),
-                ("CO₂ offset",       f"{unc.co2_offset_ton.p10:.1f}",     f"{unc.co2_offset_ton.p50:.1f}",     f"{unc.co2_offset_ton.p90:.1f}",     "ton/yr"),
-                ("Op. LCOH",         f"€{unc.op_lcoh_eur_kg.p10:.2f}",    f"€{unc.op_lcoh_eur_kg.p50:.2f}",    f"€{unc.op_lcoh_eur_kg.p90:.2f}",    "€/kg"),
-                ("Revenue",          f"€{unc.annual_op_revenue.p10:.0f}", f"€{unc.annual_op_revenue.p50:.0f}", f"€{unc.annual_op_revenue.p90:.0f}", "€/yr"),
-                ("Elec. hours",      f"{unc.electrolyzer_hours.p10:.0f}", f"{unc.electrolyzer_hours.p50:.0f}", f"{unc.electrolyzer_hours.p90:.0f}", "h/yr"),
-                ("Grid independence",f"{unc.grid_independence.p10:.0f}",  f"{unc.grid_independence.p50:.0f}",  f"{unc.grid_independence.p90:.0f}",  "%"),
+            prob_metrics = [
+                ("Annual H₂",        unc.annual_h2_kg,         "kg/yr",  "{:.0f}",    False),
+                ("Daily H₂",         unc.daily_h2_g,           "g/day",  "{:.0f}",    False),
+                ("CO₂ offset",       unc.co2_offset_ton,       "ton/yr", "{:.2f}",    False),
+                ("Op. LCOH",         unc.op_lcoh_eur_kg,       "€/kg",   "€{:.2f}",   True),
+                ("Revenue",          unc.annual_op_revenue,    "€/yr",   "€{:.0f}",   False),
+                ("Elec. hours",      unc.electrolyzer_hours,   "h/yr",   "{:.0f}",    False),
+                ("Grid independence",unc.grid_independence,    "%",      "{:.0f}%",   False),
             ]
-            df_unc = pd.DataFrame(rows,
-                columns=["Metric","P10 (pessimistic)","P50 (likely)","P90 (optimistic)","Unit"])
-            st.dataframe(df_unc, use_container_width=True, hide_index=True)
+            def _prow(lbl, m, unit, fmt, lower_is_better):
+                p10c = "#b91c1c" if lower_is_better else "#64748b"
+                p90c = "#15803d" if not lower_is_better else "#64748b"
+                return (
+                    f'<tr style="border-bottom:1px solid #f1f5f9">' +
+                    f'<td style="padding:8px 12px;font-size:12px;font-weight:500;color:#374151">{lbl}</td>' +
+                    f'<td style="padding:8px 12px;text-align:right;font-size:12px;color:{p10c}">{fmt.format(m.p10)}</td>' +
+                    f'<td style="padding:8px 12px;text-align:right;font-size:13px;font-weight:700;color:#111827">{fmt.format(m.p50)}</td>' +
+                    f'<td style="padding:8px 12px;text-align:right;font-size:12px;color:{p90c}">{fmt.format(m.p90)}</td>' +
+                    f'<td style="padding:8px 12px;text-align:right;font-size:11px;color:#94a3b8">{m.band}</td>' +
+                    f'<td style="padding:8px 12px;text-align:right;font-size:11px;color:#94a3b8">{unit}</td>' +
+                    '</tr>'
+                )
+            table_rows = "".join(_prow(*args) for args in prob_metrics)
+            prob_html = f"""<!DOCTYPE html><html><body style="margin:0;padding:6px;
+font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<table style="width:100%;border-collapse:collapse;background:#fff;
+  border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+  <thead>
+    <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
+      <th style="padding:9px 12px;text-align:left;font-size:11px;color:#374151;
+        font-weight:600;text-transform:uppercase;letter-spacing:.06em">Metric</th>
+      <th style="padding:9px 12px;text-align:right;font-size:11px;color:#b91c1c;
+        font-weight:600">P10 Pessimistic</th>
+      <th style="padding:9px 12px;text-align:right;font-size:11px;color:#111827;
+        font-weight:700">P50 Most Likely</th>
+      <th style="padding:9px 12px;text-align:right;font-size:11px;color:#15803d;
+        font-weight:600">P90 Optimistic</th>
+      <th style="padding:9px 12px;text-align:right;font-size:11px;color:#64748b;
+        font-weight:600">Band</th>
+      <th style="padding:9px 12px;text-align:right;font-size:11px;color:#64748b;
+        font-weight:600">Unit</th>
+    </tr>
+  </thead>
+  <tbody>{table_rows}</tbody>
+</table>
+</body></html>"""
+            components.html(prob_html, height=280, scrolling=False)
 
         st.markdown('<p class="sec-hdr">Scale-up pathway to commercial viability</p>',
                     unsafe_allow_html=True)
-        sc_data = [(f"{'✅' if sc.is_commercial else '🔬'} {sc.electrolyzer_kw:.0f} kW",
-                    f"{sc.h2_ton_year:.1f} ton",
-                    f"€{sc.annual_revenue:,.0f}",
-                    f"€{sc.op_lcoh:.2f}/kg",
-                    "Commercial ✅" if sc.is_commercial else "Pilot 🔬")
+
+        # Visual bar chart — H₂ production at each scale
+        sc_kw   = [sc.electrolyzer_kw   for sc in unc.scale_up]
+        sc_h2t  = [sc.h2_ton_year       for sc in unc.scale_up]
+        sc_rev  = [sc.annual_revenue     for sc in unc.scale_up]
+        sc_lbls = [f"{'✅' if sc.is_commercial else '🔬'} {sc.electrolyzer_kw:.0f} kW"
                    for sc in unc.scale_up]
-        df_sc = pd.DataFrame(sc_data,
-            columns=["Electrolyzer Scale","H₂/year","Revenue/year","Op. LCOH","Category"])
-        st.dataframe(df_sc, use_container_width=True, hide_index=True)
+        sc_cols = ["#0ea5e9" if sc.is_commercial else "#8b5cf6"
+                   for sc in unc.scale_up]
+
+        sc_fig = go.Figure()
+        sc_fig.add_trace(go.Bar(
+            x=sc_lbls, y=sc_h2t,
+            name="H₂ (ton/yr)",
+            marker_color=sc_cols, marker_line_width=0,
+            text=[f"{v:.1f} t" for v in sc_h2t],
+            textposition="outside",
+            textfont=dict(color="#374151", size=11),
+            hovertemplate="%{x}<br>H₂: %{y:.1f} ton/yr<extra></extra>"))
+        sc_fig.add_trace(go.Scatter(
+            x=sc_lbls, y=sc_rev,
+            name="Revenue (€/yr)", yaxis="y2",
+            mode="lines+markers",
+            line=dict(color=C["bess"], width=2),
+            marker=dict(size=8, color=C["bess"],
+                        line=dict(color="#fff", width=2)),
+            hovertemplate="%{x}<br>Revenue: €%{y:,.0f}/yr<extra></extra>"))
+        # Current pilot marker
+        sc_fig.add_annotation(
+            x=sc_lbls[0], y=sc_h2t[0],
+            text="← You are here",
+            showarrow=True, arrowhead=2,
+            font=dict(size=10, color="#7c3aed"),
+            arrowcolor="#7c3aed", ax=60, ay=-30)
+        sc_fig.update_layout(**mk(height=280,
+            yaxis=dict(title="H₂ production (ton/yr)", color="#8b5cf6"),
+            yaxis2=dict(title="Revenue (€/yr)", overlaying="y",
+                        side="right", color=C["bess"]),
+            legend=dict(orientation="h", y=1.1, font_size=11),
+            xaxis=dict(tickangle=-15)))
+        st.plotly_chart(sc_fig, use_container_width=True)
+
+        # Styled scale-up cards
+        scale_html = f"""<!DOCTYPE html><html><body style="margin:0;padding:6px;
+font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="display:grid;grid-template-columns:repeat({len(unc.scale_up)},1fr);gap:10px">
+{"".join(f'''<div style="background:{"#eff6ff" if sc.is_commercial else "#faf5ff"};
+  border:2px solid {"#3b82f6" if sc.is_commercial else "#8b5cf6"};
+  border-radius:10px;padding:12px 14px;text-align:center">
+  <div style="font-size:11px;font-weight:700;color:{"#1d4ed8" if sc.is_commercial else "#6d28d9"};
+    text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">
+    {"✅ Commercial" if sc.is_commercial else "🔬 Pilot"}</div>
+  <div style="font-size:22px;font-weight:700;color:#111827">{sc.electrolyzer_kw:.0f} kW</div>
+  <div style="font-size:12px;color:#64748b;margin:4px 0">electrolyzer</div>
+  <div style="border-top:1px solid #e2e8f0;margin:8px 0;padding-top:8px">
+    <div style="font-size:13px;font-weight:600;color:#111827">{sc.h2_ton_year:.1f} ton/yr</div>
+    <div style="font-size:10px;color:#64748b">H₂ production</div>
+  </div>
+  <div style="margin-bottom:6px">
+    <div style="font-size:13px;font-weight:600;color:#111827">€{sc.annual_revenue:,.0f}</div>
+    <div style="font-size:10px;color:#64748b">annual revenue</div>
+  </div>
+  <div>
+    <div style="font-size:13px;font-weight:600;color:#0ea5e9">€{sc.op_lcoh:.2f}/kg</div>
+    <div style="font-size:10px;color:#64748b">operating LCOH</div>
+  </div>
+</div>''' for sc in unc.scale_up)}
+</div>
+</body></html>"""
+        components.html(scale_html, height=220, scrolling=False)
         st.markdown(
-            '<div class="alert-info">ℹ️ <b>Scale-up note:</b> '
-            'The operating LCOH stays the same at any scale — it reflects the physics of '
-            'the S30/30 PEM stack. Commercial full-LCOH target of €4.5/kg is achieved when '
-            'CAPEX is spread over ≥1 MW production volume.</div>',
+            '<div class="alert-info" style="margin-top:8px">ℹ️ <b>Scale-up note:</b> '
+            'Operating LCOH stays constant at any scale — it reflects S30/30 PEM stack physics. '
+            'Full-LCOH target of €4.5/kg (including CAPEX amortisation) requires ≥1 MW '
+            'production volume. The pilot demonstrates the technology and validates '
+            'the Zagreb renewable resource.</div>',
             unsafe_allow_html=True)
     else:
         st.info("Click **▶ Run Uncertainty Analysis** to generate the probabilistic report.")
