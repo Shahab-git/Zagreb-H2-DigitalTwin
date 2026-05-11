@@ -609,7 +609,7 @@ function draw(){{
     const x=tx(h);
     cx.strokeStyle='rgba(0,0,0,.07)';cx.lineWidth=.5;
     cx.beginPath();cx.moveTo(x,P.t);cx.lineTo(x,P.t+CH);cx.stroke();
-    cx.fillStyle='#374151';cx.font='11px system-ui';cx.textAlign='center';
+    cx.fillStyle='#111827';cx.font='bold 11px system-ui';cx.textAlign='center';
     cx.fillText(String(h).padStart(2,'0')+':00',x,P.t+CH+16);
   }}
 
