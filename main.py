@@ -1697,71 +1697,272 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
 with tabs[6]:
     st.markdown('<p class="sec-hdr">Economic operating point optimiser — ITM S30/30</p>',
                 unsafe_allow_html=True)
-    oc1, oc2 = st.columns(2)
-    with oc1:
-        opt_power    = st.slider("Available renewable power (kW)",0.0,15.0,float(s.total_gen_kw),0.1)
-        opt_h2_price = st.slider("H₂ sell price (€/kg)",3.0,12.0,sc_h2_price,0.5)
-        opt_source   = st.radio("Energy source",["renewable","grid"],horizontal=True)
-    if st.button("🔍 Find Optimal Operating Point"):
-        opt_res = st.session_state.optimizer.find_optimal_operating_point(
-            available_power_kw=opt_power,
-            grid_price_eur_kwh=Config.GRID_PRICE_BUY,
-            h2_price_eur_kg=opt_h2_price,
-            source=opt_source)
-        st.session_state.opt_result = opt_res
+
+    # ── Controls row ───────────────────────────────────────────────────────
+    ctl = st.columns([2, 2, 2, 1])
+    with ctl[0]:
+        opt_power = st.slider(
+            "Available power (kW)", 0.0,
+            Config.PV_SYSTEM_CAPACITY_KW + Config.WIND_SYSTEM_CAPACITY_KW,
+            float(min(s.total_gen_kw,
+                Config.PV_SYSTEM_CAPACITY_KW + Config.WIND_SYSTEM_CAPACITY_KW)),
+            0.1, key="opt_pwr")
+    with ctl[1]:
+        opt_h2_price = st.slider(
+            "H₂ sell price (€/kg)", 3.0, 12.0,
+            float(sc_h2_price), 0.5, key="opt_h2p")
+    with ctl[2]:
+        opt_source = st.radio(
+            "Energy source", ["renewable", "grid"],
+            horizontal=True, key="opt_src")
+    with ctl[3]:
+        st.markdown("<br>", unsafe_allow_html=True)
+        run_opt = st.button("🔍 Optimise", type="primary",
+                            use_container_width=True)
+
+    # Auto-run on first load or button press
+    if run_opt or st.session_state.opt_result is None:
+        st.session_state.opt_result =             st.session_state.optimizer.find_optimal_operating_point(
+                available_power_kw=opt_power,
+                grid_price_eur_kwh=Config.GRID_PRICE_BUY,
+                h2_price_eur_kg=opt_h2_price,
+                source=opt_source)
 
     opt_res = st.session_state.opt_result
     if opt_res and opt_res.all_points:
-        bl = opt_res.best_lcoh_point; bp = opt_res.best_profit_point
-        oc = st.columns(2)
-        with oc[0]:
-            st.markdown('<p class="sec-hdr">Best LCOH point</p>', unsafe_allow_html=True)
-            kpi(st,"Load",f"{bl.elec_power_kw:.2f} kW",
-                f"H₂ {bl.h2_rate_kg_h*1000:.1f} g/h · η {bl.efficiency_pct:.1f}%","kpi-cyan")
-            st.metric("LCOH",f"€{bl.lcoh_eur_kg:.3f}/kg",
-                      delta=f"vs target €{Config.LCOH_TARGET_EURO_KG}")
-            st.metric("Annual net profit",f"€{bl.net_profit_eur:,.0f}")
-        with oc[1]:
-            st.markdown('<p class="sec-hdr">Best profit point</p>', unsafe_allow_html=True)
-            kpi(st,"Load",f"{bp.elec_power_kw:.2f} kW",
-                f"H₂ {bp.h2_rate_kg_h*1000:.1f} g/h · η {bp.efficiency_pct:.1f}%","kpi-green")
-            st.metric("LCOH",f"€{bp.lcoh_eur_kg:.3f}/kg")
-            st.metric("Annual net profit",f"€{bp.net_profit_eur:,.0f}")
-        st.markdown(
-            f'<div class="alert-info">💡 {opt_res.recommendation}<br>{opt_res.reason}</div>',
-            unsafe_allow_html=True)
-        st.markdown('<p class="sec-hdr">S30/30 operating curve</p>', unsafe_allow_html=True)
+        bl  = opt_res.best_lcoh_point
+        bp  = opt_res.best_profit_point
         pts = opt_res.all_points
-        odf = pd.DataFrame({
-            "Power (kW)":  [p.elec_power_kw for p in pts],
-            "η (%)":       [p.efficiency_pct for p in pts],
-            "LCOH (€/kg)": [p.lcoh_eur_kg for p in pts],
-        })
-        fc_fig = go.Figure()
-        fc_fig.add_trace(go.Scatter(x=odf["Power (kW)"],y=odf["η (%)"],
-            line=dict(color=C["elec"],width=2),name="η (%)",yaxis="y"))
-        fc_fig.add_trace(go.Scatter(x=odf["Power (kW)"],y=odf["LCOH (€/kg)"],
-            line=dict(color=C["h2"],width=2,dash="dash"),name="LCOH €/kg",yaxis="y2"))
-        fc_fig.add_vline(x=bl.elec_power_kw,line_dash="dot",line_color=C["bess"],
-            annotation_text="Best LCOH",annotation_font_color=C["bess"])
-        fc_fig.add_vline(x=bp.elec_power_kw,line_dash="dot",line_color=C["solar"],
-            annotation_text="Best profit",annotation_font_color=C["solar"])
-        fc_fig.update_layout(**mk(height=280,
-            yaxis=dict(title="Efficiency (%)",color=C["elec"]),
-            yaxis2=dict(title="LCOH (€/kg)",overlaying="y",side="right",color=C["h2"])))
-        st.plotly_chart(fc_fig, use_container_width=True)
 
-        st.markdown('<p class="sec-hdr">Sensitivity analysis</p>', unsafe_allow_html=True)
-        sens = st.session_state.optimizer.annual_sensitivity(
-            h2_prices=[4.0,5.0,6.0,7.0,8.0], pv_scales=[1.0,1.5,2.0])
-        sdf = pd.DataFrame(sens)
-        sdf.columns = ["PV scale","H₂ price €/kg","Best LCOH €/kg","Annual H₂ kg","Net profit €","Profitable"]
-        sdf["Profitable"]   = sdf["Profitable"].map({True:"✅",False:"❌"})
-        sdf["Net profit €"] = sdf["Net profit €"].apply(lambda x: f"€{x:,.0f}")
-        sdf["Annual H₂ kg"] = sdf["Annual H₂ kg"].apply(lambda x: f"{x:.0f}")
-        st.dataframe(sdf, use_container_width=True, hide_index=True)
+        # ── KPI strip ──────────────────────────────────────────────────────
+        ok = st.columns(4)
+        kpi(ok[0], "Best LCOH point",
+            f"{bl.elec_power_kw:.2f} kW",
+            f"€{bl.lcoh_eur_kg:.3f}/kg · η {bl.efficiency_pct:.1f}%",
+            "kpi-cyan")
+        kpi(ok[1], "Lowest LCOH",
+            f"€{bl.lcoh_eur_kg:.3f}/kg",
+            f"Target €{Config.LCOH_TARGET_EURO_KG:.1f}/kg · "
+            + ("✅ Met" if bl.lcoh_eur_kg <= Config.LCOH_TARGET_EURO_KG
+               else "⚠ Above target"),
+            "kpi-green" if bl.lcoh_eur_kg <= Config.LCOH_TARGET_EURO_KG
+            else "kpi-amber")
+        kpi(ok[2], "Best profit point",
+            f"{bp.elec_power_kw:.2f} kW",
+            f"€{bp.net_profit_eur:,.0f}/yr · η {bp.efficiency_pct:.1f}%",
+            "kpi-purple")
+        kpi(ok[3], "Max annual profit",
+            f"€{bp.net_profit_eur:,.0f}",
+            f"H₂ {bp.annual_h2_kg:.0f} kg/yr · "
+            + ("✅ Profitable" if bp.net_profit_eur > 0 else "❌ Loss"),
+            "kpi-green" if bp.net_profit_eur > 0 else "kpi-red")
+
+        # Recommendation banner
+        st.markdown(
+            f'<div class="alert-info" style="margin:8px 0">💡 '
+            f'<b>{opt_res.recommendation}</b> — {opt_res.reason}</div>',
+            unsafe_allow_html=True)
+
+        # ── Operating curve — FULL WIDTH ───────────────────────────────────
+        st.markdown(
+            '<p class="sec-hdr">S30/30 operating curve — '
+            'efficiency · LCOH · H₂ rate</p>',
+            unsafe_allow_html=True)
+
+        p_arr  = [p.elec_power_kw      for p in pts]
+        e_arr  = [p.efficiency_pct     for p in pts]
+        l_arr  = [p.lcoh_eur_kg        for p in pts]
+        h_arr  = [p.h2_rate_kg_h*1000  for p in pts]
+        pr_arr = [p.net_profit_eur     for p in pts]
+
+        oc_fig = go.Figure()
+
+        # H₂ rate — background fill
+        oc_fig.add_trace(go.Scatter(
+            x=p_arr, y=h_arr, name="H₂ rate (g/h)", yaxis="y3",
+            fill="tozeroy", fillcolor="rgba(14,165,233,.07)",
+            line=dict(color="rgba(14,165,233,.25)", width=1),
+            hovertemplate="Power: %{x:.2f} kW  H₂: %{y:.1f} g/h<extra></extra>"))
+
+        # Efficiency curve
+        oc_fig.add_trace(go.Scatter(
+            x=p_arr, y=e_arr, name="Efficiency η (%)", yaxis="y",
+            line=dict(color=C["elec"], width=3),
+            hovertemplate="Power: %{x:.2f} kW  η: %{y:.1f}%<extra></extra>"))
+
+        # LCOH curve
+        oc_fig.add_trace(go.Scatter(
+            x=p_arr, y=l_arr, name="LCOH (€/kg)", yaxis="y2",
+            line=dict(color=C["h2"], width=2.5, dash="dash"),
+            hovertemplate="Power: %{x:.2f} kW  LCOH: €%{y:.3f}/kg<extra></extra>"))
+
+        # Datasheet reference verticals
+        for p_pt, lbl, vcol in [
+            (Config.ELEC_P_MIN_KW, "Min 0.74kW", "#94a3b8"),
+            (Config.ELEC_P_NOM_KW, "Nominal 3kW", "#22c55e"),
+            (Config.ELEC_P_MAX_KW, "Peak 5.63kW", "#f59e0b"),
+        ]:
+            oc_fig.add_vline(x=p_pt, line_dash="dot",
+                line_color=vcol, line_width=1.2,
+                annotation_text=lbl, annotation_font_size=10,
+                annotation_font_color=vcol,
+                annotation_position="top right")
+
+        # Best LCOH diamond
+        oc_fig.add_trace(go.Scatter(
+            x=[bl.elec_power_kw], y=[bl.efficiency_pct],
+            mode="markers", name="◆ Best LCOH", yaxis="y",
+            marker=dict(color=C["bess"], size=14, symbol="diamond",
+                        line=dict(color="#fff", width=2)),
+            hovertemplate=(f"Best LCOH: {bl.elec_power_kw:.2f} kW<br>"
+                           f"η: {bl.efficiency_pct:.1f}%<br>"
+                           f"LCOH: €{bl.lcoh_eur_kg:.3f}/kg"
+                           "<extra>Best LCOH</extra>")))
+
+        # Best profit star
+        oc_fig.add_trace(go.Scatter(
+            x=[bp.elec_power_kw], y=[bp.efficiency_pct],
+            mode="markers", name="★ Best profit", yaxis="y",
+            marker=dict(color=C["solar"], size=14, symbol="star",
+                        line=dict(color="#fff", width=2)),
+            hovertemplate=(f"Best profit: {bp.elec_power_kw:.2f} kW<br>"
+                           f"η: {bp.efficiency_pct:.1f}%<br>"
+                           f"Profit: €{bp.net_profit_eur:,.0f}/yr"
+                           "<extra>Best profit</extra>")))
+
+        # Current live operating point
+        oc_fig.add_trace(go.Scatter(
+            x=[s.elec_kw], y=[s.elec_eff_pct],
+            mode="markers", name="● Now (live)", yaxis="y",
+            marker=dict(color=C["fc"], size=16, symbol="circle",
+                        line=dict(color="#fff", width=2.5)),
+            hovertemplate=(f"Live: {s.elec_kw:.2f} kW<br>"
+                           f"η: {s.elec_eff_pct:.1f}%"
+                           "<extra>Current</extra>")))
+
+        # LCOH target reference
+        oc_fig.add_hline(
+            y=Config.LCOH_TARGET_EURO_KG,
+            line_dash="dot", line_color="#ef4444",
+            line_width=1.5, yref="y2",
+            annotation_text=f"Target €{Config.LCOH_TARGET_EURO_KG}/kg",
+            annotation_font_color="#ef4444",
+            annotation_font_size=10)
+
+        oc_fig.update_layout(**mk(height=360,
+            xaxis=dict(title="Electrolyzer power (kW)",
+                       range=[0, Config.ELEC_P_MAX_KW + 0.4]),
+            yaxis=dict(title="Efficiency η (%)", color=C["elec"],
+                       range=[50, 95], side="left"),
+            yaxis2=dict(title="LCOH (€/kg)", overlaying="y",
+                        side="right", color=C["h2"]),
+            yaxis3=dict(overlaying="y", side="right",
+                        showgrid=False, showticklabels=False),
+            legend=dict(orientation="h", y=1.12, x=0, font_size=11)))
+        st.plotly_chart(oc_fig, use_container_width=True)
+
+        # ── Row 2: H₂ vs profit scatter + sensitivity heatmap ─────────────
+        r7a, r7b = st.columns(2)
+
+        with r7a:
+            st.markdown(
+                '<p class="sec-hdr">H₂ volume vs profit — operating trade-off</p>',
+                unsafe_allow_html=True)
+            sc7 = go.Figure()
+            sc7.add_trace(go.Scatter(
+                x=[p.annual_h2_kg for p in pts],
+                y=pr_arr,
+                mode="markers",
+                marker=dict(
+                    color=p_arr,
+                    colorscale=[[0,"#f0f9ff"],[0.5,C["elec"]],[1,"#4c1d95"]],
+                    size=8, opacity=0.85,
+                    colorbar=dict(title="kW", thickness=12, len=0.6),
+                    line=dict(color="#fff", width=0.5)),
+                hovertemplate=(
+                    "Power: %{marker.color:.2f} kW<br>"
+                    "H₂: %{x:.0f} kg/yr<br>"
+                    "Profit: €%{y:,.0f}/yr<extra></extra>"),
+                showlegend=False))
+            # Best LCOH marker
+            sc7.add_trace(go.Scatter(
+                x=[bl.annual_h2_kg], y=[bl.net_profit_eur],
+                mode="markers+text", name="◆ Best LCOH",
+                text=["◆ LCOH"], textposition="top right",
+                textfont=dict(size=10, color=C["bess"]),
+                marker=dict(color=C["bess"], size=13, symbol="diamond",
+                            line=dict(color="#fff", width=2))))
+            # Best profit marker
+            sc7.add_trace(go.Scatter(
+                x=[bp.annual_h2_kg], y=[bp.net_profit_eur],
+                mode="markers+text", name="★ Best profit",
+                text=["★ Profit"], textposition="top right",
+                textfont=dict(size=10, color=C["solar"]),
+                marker=dict(color=C["solar"], size=13, symbol="star",
+                            line=dict(color="#fff", width=2))))
+            # Break-even
+            sc7.add_hline(y=0, line_dash="dot", line_color="#ef4444",
+                line_width=1.2,
+                annotation_text="Break-even",
+                annotation_font_size=10,
+                annotation_font_color="#ef4444")
+            sc7.update_layout(**mk(height=310,
+                xaxis_title="Annual H₂ production (kg/yr)",
+                yaxis_title="Net annual profit (€)",
+                legend=dict(orientation="h", y=1.1, font_size=10)))
+            st.plotly_chart(sc7, use_container_width=True)
+
+        with r7b:
+            st.markdown(
+                '<p class="sec-hdr">Sensitivity heatmap — H₂ price × PV scale</p>',
+                unsafe_allow_html=True)
+            with st.spinner("Computing sensitivity…"):
+                sens = st.session_state.optimizer.annual_sensitivity(
+                    h2_prices=[4.0, 5.0, 6.0, 7.0, 8.0],
+                    pv_scales=[1.0, 1.5, 2.0])
+            sdf_raw      = pd.DataFrame(sens)
+            pv_vals      = sorted(sdf_raw["pv_scale"].unique())
+            h2_vals      = sorted(sdf_raw["h2_price"].unique())
+            heat_z       = []
+            heat_text    = []
+            for pv_s in pv_vals:
+                row_z    = []
+                row_txt  = []
+                for h2_p in h2_vals:
+                    row = sdf_raw[(sdf_raw["pv_scale"] == pv_s) &
+                                  (sdf_raw["h2_price"] == h2_p)]
+                    v   = float(row["net_profit"].values[0]) if len(row) else 0
+                    row_z.append(v)
+                    row_txt.append(f"€{v:,.0f}")
+                heat_z.append(row_z)
+                heat_text.append(row_txt)
+
+            hm = go.Figure(go.Heatmap(
+                z=heat_z,
+                x=[f"€{p}/kg" for p in h2_vals],
+                y=[f"PV ×{s}" for s in pv_vals],
+                text=heat_text,
+                texttemplate="%{text}",
+                textfont=dict(size=11, color="#111827"),
+                colorscale=[
+                    [0.0, "#fee2e2"],
+                    [0.35, "#fef9c3"],
+                    [0.6, "#dcfce7"],
+                    [1.0, "#14532d"]],
+                hovertemplate=(
+                    "PV: %{y}<br>"
+                    "H₂ price: %{x}<br>"
+                    "Net profit: %{text}<extra></extra>"),
+                showscale=True,
+                colorbar=dict(title="€/yr", thickness=14, len=0.8)))
+            hm.update_layout(**mk(height=310,
+                xaxis_title="H₂ market price",
+                yaxis_title="PV system scale",
+                margin=dict(t=20, b=50, l=70, r=80)))
+            st.plotly_chart(hm, use_container_width=True)
+
     else:
-        st.info("Click **🔍 Find Optimal Operating Point** to run the analysis.")
+        st.info("Adjust controls above and click **🔍 Optimise** to run.")
 
 # ─── TAB 8: UNCERTAINTY ────────────────────────────────────────────────────
 with tabs[7]:
