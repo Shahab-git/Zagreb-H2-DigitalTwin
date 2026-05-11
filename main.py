@@ -2190,58 +2190,193 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
 
 # ─── TAB 9: SAFETY ─────────────────────────────────────────────────────────
 with tabs[8]:
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown('<p class="sec-hdr">System health matrix</p>', unsafe_allow_html=True)
-        hrow("BESS SoC",         s.bess_soc_pct,   "%",   (20,90),(10,95))
-        hrow("BESS Temperature", s.bess_temp_c,    "°C",  (10,45),(0,55))
-        hrow("BESS SoH",         s.bess_soh_pct,   "%",   (85,100),(75,100))
-        hrow("Stack SoH",        s.elec_soh_pct,   "%",   (85,100),(75,100))
-        hrow("Tank Pressure",    s.pressure_bar,   "bar", (10,550),(10,625))
-        hrow("Tank Temperature", s.tank_temp_c,    "°C",  (15,55),(10,65))
-        hrow("H₂ Purity",        s.elec_purity,    "%",   (99.95,100),(99.50,100),".4f")
+
+    # ── Overall system status banner ───────────────────────────────────────
+    has_critical = any(a.level == "error"   for a in alrt.active) if alrt.active else False
+    has_warning  = any(a.level == "warning" for a in alrt.active) if alrt.active else False
+    n_alerts     = len(alrt.active) if alrt.active else 0
+
+    if has_critical:
+        banner_col, banner_ic, banner_txt = "#fee2e2", "🚨", f"CRITICAL — {n_alerts} active alert(s) require immediate attention"
+        banner_border = "#ef4444"
+    elif has_warning:
+        banner_col, banner_ic, banner_txt = "#fffbeb", "⚠", f"WARNING — {n_alerts} active alert(s)"
+        banner_border = "#f59e0b"
+    else:
+        banner_col, banner_ic, banner_txt = "#f0fdf4", "✅", "ALL SYSTEMS NOMINAL — No active alerts"
+        banner_border = "#22c55e"
+
+    st.markdown(
+        f'<div style="background:{banner_col};border:2px solid {banner_border};'
+        f'border-radius:10px;padding:14px 20px;margin-bottom:12px;'
+        f'display:flex;align-items:center;gap:12px">'
+        f'<span style="font-size:24px">{banner_ic}</span>'
+        f'<div>'
+        f'<div style="font-size:15px;font-weight:700;color:#111827">{banner_txt}</div>'
+        f'<div style="font-size:12px;color:#64748b;margin-top:2px">'
+        f'LUMINIH2 · Zagreb · Tick #{s.tick} · {now_dt.strftime("%H:%M:%S")}'
+        f'</div></div></div>',
+        unsafe_allow_html=True)
+
+    # ── Row 1: Health matrix + Active alerts ───────────────────────────────
+    s9a, s9b = st.columns([1, 1])
+
+    with s9a:
+        st.markdown('<p class="sec-hdr">System health matrix</p>',
+                    unsafe_allow_html=True)
+        hrow("BESS SoC",         s.bess_soc_pct,  "%",    (20, 90),  (10, 95))
+        hrow("BESS Temperature", s.bess_temp_c,   "°C",   (10, 45),  (0,  55))
+        hrow("BESS SoH",         s.bess_soh_pct,  "%",    (85, 100), (75, 100))
+        hrow("Stack SoH",        s.elec_soh_pct,  "%",    (85, 100), (75, 100))
+        hrow("Tank Pressure",    s.pressure_bar,  "bar",  (10, 550), (10, 625))
+        hrow("Tank Temperature", s.tank_temp_c,   "°C",   (15, 55),  (10, 65))
+        hrow("H₂ Purity",        s.elec_purity,   "%",    (99.95, 100), (99.50, 100), ".4f")
         if sub:
-            hrow("Water Quality",sub["water"].resistance_mohm_cm,"MΩ·cm",(10,999),(5,10))
-            hrow("H₂ Moisture",  sub["dryer"].moisture_ppm,      "ppm",  (0,5),(0,8),".2f")
-            hrow("Stack Temp",   sub["warmup"].current_temp_c,   "°C",   (20,65),(15,70))
-    with c2:
+            hrow("Water Quality",
+                 sub["water"].resistance_mohm_cm, "MΩ·cm", (10, 999), (5, 10))
+            hrow("H₂ Moisture",
+                 sub["dryer"].moisture_ppm,       "ppm",   (0, 5),    (0, 8), ".2f")
+            hrow("Stack Temp",
+                 sub["warmup"].current_temp_c,    "°C",    (20, 65),  (15, 70))
+
+        # Leak status badge
+        ld_c  = "#fee2e2" if s.leak_detected else "#f0fdf4"
+        ld_bc = "#ef4444" if s.leak_detected else "#22c55e"
+        ld_tc = "#b91c1c" if s.leak_detected else "#15803d"
+        st.markdown(
+            f'<div style="background:{ld_c};border:1px solid {ld_bc};'
+            f'border-radius:8px;padding:8px 12px;margin-top:8px;'
+            f'display:flex;align-items:center;justify-content:space-between">'
+            f'<span style="font-size:13px;font-weight:600;color:{ld_tc}">'
+            f'{"⚠ H₂ LEAK DETECTED" if s.leak_detected else "✅ No leak detected"}'
+            f'</span>'
+            f'<span style="font-size:11px;color:#64748b">'
+            f'Threshold {Config.LEAK_DETECTION_THRESHOLD:.2e} kg/h</span>'
+            f'</div>',
+            unsafe_allow_html=True)
+
+    with s9b:
+        # Active alerts
         st.markdown('<p class="sec-hdr">Active alerts</p>', unsafe_allow_html=True)
         if not alrt.active:
             st.markdown(
-                '<div class="alert-info">✅ No active alerts — all systems nominal</div>',
+                '<div class="alert-info" style="margin-bottom:8px">'
+                '✅ No active alerts — all systems nominal</div>',
                 unsafe_allow_html=True)
         else:
-            for a in alrt.active:
+            for a in sorted(alrt.active,
+                            key=lambda x: {"error":0,"warning":1,"info":2}.get(x.level,3)):
                 cls = {"error":"alert-error","warning":"alert-warning",
                        "info":"alert-info"}.get(a.level,"alert-info")
                 ic  = {"error":"🚨","warning":"⚠","info":"ℹ"}.get(a.level,"ℹ")
                 st.markdown(
-                    f'<div class="{cls}">{ic} <b>[{a.code}]</b> {a.message}'
-                    f'<span style="float:right;opacity:.6;font-size:11px">{a.ts}</span></div>',
+                    f'<div class="{cls}" style="margin-bottom:6px">'
+                    f'{ic} <b>[{a.code}]</b> {a.message}'
+                    f'<span style="float:right;opacity:.6;font-size:11px">'
+                    f'{a.ts}</span></div>',
                     unsafe_allow_html=True)
-        st.markdown('<p class="sec-hdr">Device safety limits</p>', unsafe_allow_html=True)
-        limits = {
-            "BESS thermal runaway":   f"{Config.THERMAL_RUNAWAY_TEMP}°C (LFP)",
-            "Tank MWP (TH540-50)":   f"{Config.SAFETY_MAX_PRESSURE_BAR} bar",
-            "Emergency SoC":         f"{Config.EMERGENCY_SHUTDOWN_SOC*100:.0f}%",
-            "Leak threshold":        f"{Config.LEAK_DETECTION_THRESHOLD:.2e} kg/h",
-            "Water quality":         "> 10 MΩ·cm (DIN ISO 3696 T1)",
-            "H₂ moisture (AIRCELL)": "< 5 ppm",
-            "Electrolyzer range":    f"{Config.electrolyzer.water_temp_min_c}–{Config.electrolyzer.water_temp_max_c}°C",
-            "Compressor outlet":     f"max {Config.compressor.outlet_max_bar} bar (HCS-100)",
-        }
-        for k_, v_ in limits.items():
-            st.markdown(
-                f'<div style="display:flex;justify-content:space-between;'
-                f'padding:6px 0;border-bottom:1px solid #f1f5f9">'
-                f'<span style="color:#1e293b;font-size:12px;font-weight:500">{k_}</span>'
-                f'<span style="color:#111827;font-size:12px;font-weight:700">{v_}</span></div>',
+
+        # Maintenance messages from subsystems
+        if sub and sub.get("maintenance"):
+            st.markdown('<p class="sec-hdr" style="margin-top:10px">'
+                        'Maintenance required</p>', unsafe_allow_html=True)
+            for m_msg in sub["maintenance"]:
+                st.markdown(
+                    f'<div class="alert-warning" style="margin-bottom:4px">'
+                    f'🔧 {m_msg}</div>',
+                    unsafe_allow_html=True)
+
+        # Device safety limits — styled cards
+        st.markdown('<p class="sec-hdr" style="margin-top:10px">'
+                    'Device safety limits</p>', unsafe_allow_html=True)
+        limits = [
+            ("BESS thermal runaway",  f"{Config.THERMAL_RUNAWAY_TEMP}°C",      "LFP runaway threshold"),
+            ("Tank MWP (TH540-50)",   f"{Config.SAFETY_MAX_PRESSURE_BAR} bar", "Maximum working pressure"),
+            ("Emergency SoC floor",   f"{Config.EMERGENCY_SHUTDOWN_SOC*100:.0f}%", "Auto grid import below"),
+            ("H₂ leak threshold",     f"{Config.LEAK_DETECTION_THRESHOLD:.2e} kg/h", "Mass balance alarm"),
+            ("Water quality min",     "> 10 MΩ·cm",                            "DIN ISO 3696 Type 1"),
+            ("H₂ moisture max",       "< 5 ppm",                               "AIRCELL 3000 requirement"),
+            ("Electrolyzer range",    f"{Config.electrolyzer.water_temp_min_c}–{Config.electrolyzer.water_temp_max_c}°C", "Stack operating temp"),
+            ("Compressor outlet",     f"max {Config.compressor.outlet_max_bar} bar", "HCS-100 rated limit"),
+        ]
+        limits_html = f"""<!DOCTYPE html><html><body style="margin:0;padding:4px;
+font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="display:flex;flex-direction:column;gap:4px">
+{"".join(f'<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px"><div><div style="font-size:12px;font-weight:500;color:#1e293b">{lbl}</div><div style="font-size:10px;color:#94a3b8">{sub_}</div></div><div style="font-size:13px;font-weight:700;color:#111827;white-space:nowrap">{val}</div></div>' for lbl,val,sub_ in limits)}
+</div>
+</body></html>"""
+        components.html(limits_html, height=310, scrolling=False)
+
+    # ── Row 2: Safety trend charts ─────────────────────────────────────────
+    st.markdown('<p class="sec-hdr">Safety trends — real-time monitoring</p>',
                 unsafe_allow_html=True)
-        ld_c = "badge-red" if s.leak_detected else "badge-green"
-        st.markdown(
-            f'<br><span class="badge {ld_c}" style="font-size:13px;padding:6px 14px">'
-            f'{"⚠ H₂ LEAK DETECTED" if s.leak_detected else "✅ No leak detected"}'
-            f'</span>', unsafe_allow_html=True)
+    t9a, t9b, t9c = st.columns(3)
+
+    with t9a:
+        # BESS SoC + temperature combined
+        if hd("bess_soc_pct") and hd("bess_temp_c"):
+            sf = go.Figure()
+            sf.add_trace(go.Scatter(
+                x=hist["time"], y=hist["bess_soc_pct"],
+                name="SoC %", fill="tozeroy",
+                fillcolor="rgba(34,197,94,.10)",
+                line=dict(color=C["bess"], width=2),
+                hovertemplate="%{y:.1f}%<extra>BESS SoC</extra>"))
+            sf.add_hline(y=Config.BATT_SOC_MIN*100, line_dash="dot",
+                line_color="#ef4444", line_width=1,
+                annotation_text=f"Min {Config.BATT_SOC_MIN*100:.0f}%",
+                annotation_font_size=9, annotation_font_color="#ef4444")
+            sf.update_layout(**mk(height=180, yaxis_title="SoC %",
+                margin=dict(t=20,b=30,l=44,r=16)))
+            st.plotly_chart(sf, use_container_width=True)
+
+    with t9b:
+        # BESS temperature with danger zones
+        if hd("bess_temp_c"):
+            tf = go.Figure()
+            tf.add_hrect(y0=55, y1=Config.THERMAL_RUNAWAY_TEMP,
+                fillcolor="rgba(251,191,36,.12)", line_width=0,
+                annotation_text="⚠ Warning", annotation_font_size=9,
+                annotation_font_color="#92400e")
+            tf.add_hrect(y0=Config.THERMAL_RUNAWAY_TEMP, y1=90,
+                fillcolor="rgba(239,68,68,.15)", line_width=0,
+                annotation_text="🔥 Runaway", annotation_font_size=9,
+                annotation_font_color="#7f1d1d")
+            tf.add_trace(go.Scatter(
+                x=hist["time"], y=hist["bess_temp_c"],
+                name="BESS °C", fill="tozeroy",
+                fillcolor="rgba(239,68,68,.06)",
+                line=dict(color=C["fc"], width=2),
+                hovertemplate="%{y:.1f}°C<extra>BESS temp</extra>"))
+            tf.update_layout(**mk(height=180, yaxis_title="°C",
+                yaxis=dict(range=[10, 80]),
+                margin=dict(t=20,b=30,l=44,r=16)))
+            st.plotly_chart(tf, use_container_width=True)
+
+    with t9c:
+        # Tank pressure trend
+        if hd("pressure_bar"):
+            pf = go.Figure()
+            pf.add_hrect(
+                y0=Config.SAFETY_MAX_PRESSURE_BAR * 0.90,
+                y1=Config.SAFETY_MAX_PRESSURE_BAR,
+                fillcolor="rgba(239,68,68,.10)", line_width=0,
+                annotation_text="Near MWP", annotation_font_size=9,
+                annotation_font_color="#b91c1c")
+            pf.add_trace(go.Scatter(
+                x=hist["time"], y=hist["pressure_bar"],
+                name="Pressure", fill="tozeroy",
+                fillcolor="rgba(59,130,246,.08)",
+                line=dict(color=C["wind"], width=2),
+                hovertemplate="%{y:.0f} bar<extra>Tank pressure</extra>"))
+            pf.add_hline(
+                y=Config.SAFETY_MAX_PRESSURE_BAR,
+                line_dash="dash", line_color="#ef4444", line_width=1.5,
+                annotation_text=f"MWP {Config.SAFETY_MAX_PRESSURE_BAR:.0f} bar",
+                annotation_font_size=9, annotation_font_color="#ef4444")
+            pf.update_layout(**mk(height=180, yaxis_title="bar",
+                margin=dict(t=20,b=30,l=44,r=16)))
+            st.plotly_chart(pf, use_container_width=True)
 
 # =============================================================================
 # AUTO-REFRESH
