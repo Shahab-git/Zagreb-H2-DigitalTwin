@@ -502,59 +502,153 @@ with tabs[0]:
 
 # ─── TAB 2: PRODUCTION ─────────────────────────────────────────────────────
 with tabs[1]:
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown('<p class="sec-hdr">Power allocation (stacked)</p>', unsafe_allow_html=True)
-        if hd():
-            f5 = go.Figure()
-            for col, color, fill, name in [
-                ("bess_charge_kw", C["bess"], "rgba(34,197,94,.5)",   "BESS charge"),
-                ("elec_kw",        C["elec"], "rgba(139,92,246,.5)",  "Electrolyzer"),
-                ("ev_kw",          C["ev"],   "rgba(96,165,250,.5)",  "EV charger"),
-                ("grid_export_kw", C["grid"], "rgba(148,163,184,.5)", "Grid export"),
-            ]:
-                if col in hist.columns:
-                    f5.add_trace(go.Scatter(x=hist["time"], y=hist[col],
-                        stackgroup="one", name=name,
-                        line=dict(color=color,width=1), fillcolor=fill))
-            f5.update_layout(**mk(height=240, yaxis_title="kW"))
-            st.plotly_chart(f5, use_container_width=True)
 
-        st.markdown('<p class="sec-hdr">Stack SoH</p>', unsafe_allow_html=True)
-        f6 = go.Figure(go.Indicator(
-            mode="gauge+number", value=s.elec_soh_pct,
-            title={"text":"Electrolyzer SoH (%)","font":{"color":"#111827"}},
-            number={"font":{"color":"#111827"}},
-            gauge={"axis":{"range":[70,100],"tickcolor":"#374151"},
-                   "bar":{"color":C["elec"]},"bgcolor":"#f8fafc",
-                   "steps":[{"range":[70,80],"color":"#fee2e2"},
-                             {"range":[80,90],"color":"#fef9c3"},
-                             {"range":[90,100],"color":"#dcfce7"}],
-                   "threshold":{"line":{"color":C["fc"],"width":2},"value":80}}))
-        f6.update_layout(**mk(height=200))
-        st.plotly_chart(f6, use_container_width=True)
+    # ── 1. KPI row ─────────────────────────────────────────────────────────
+    pk = st.columns(5)
+    elec_mode = (
+        "overload" if s.elec_kw > Config.ELEC_P_NOM_KW * 1.05 else
+        "nominal"  if s.elec_kw >= Config.ELEC_P_NOM_KW * 0.90 else
+        "partial"  if s.elec_kw >= Config.ELEC_P_MIN_KW else "off"
+    )
+    mode_colors = {"nominal":"kpi-green","overload":"kpi-amber","partial":"kpi-blue","off":"kpi-red"}
+    mode_icons  = {"nominal":"● Nominal","overload":"▲ Overload","partial":"◎ Partial","off":"○ Off"}
+    kpi(pk[0], "Electrolyzer load", f"{s.elec_kw:.2f} kW",
+        f"Range {Config.ELEC_P_MIN_KW}–{Config.ELEC_P_MAX_KW} kW", "kpi-purple")
+    kpi(pk[1], "H₂ rate",
+        f"{s.h2_kg_h*1000:.2f} g/h",
+        f"Nom: {Config.electrolyzer.h2_nom_kg_h*1000:.1f} g/h", "kpi-cyan")
+    kpi(pk[2], "Efficiency",
+        f"{s.elec_eff_pct:.1f}%",
+        f"Purity {s.elec_purity:.3f}%",
+        "kpi-green" if s.elec_eff_pct >= 75 else "kpi-amber")
+    kpi(pk[3], "Stack SoH",
+        f"{s.elec_soh_pct:.2f}%",
+        f"MTTF {Config.electrolyzer.mttf_hours:,} h",
+        "kpi-green" if s.elec_soh_pct >= 90 else "kpi-amber" if s.elec_soh_pct >= 80 else "kpi-red")
+    kpi(pk[4], "Operating mode",
+        mode_icons.get(elec_mode, "—"),
+        f"{s.elec_kw:.2f} kW → {s.h2_kg_h*1000:.1f} g/h",
+        mode_colors.get(elec_mode, "kpi-blue"))
 
-    with c2:
+    # ── 2. Power allocation — FULL WIDTH ───────────────────────────────────
+    st.markdown('<p class="sec-hdr">Power allocation — real-time stacked</p>', unsafe_allow_html=True)
+    if hd():
+        f5 = go.Figure()
+        for col, color, fill, name in [
+            ("elec_kw",        C["elec"], "rgba(139,92,246,.55)", "Electrolyzer"),
+            ("bess_charge_kw", C["bess"], "rgba(34,197,94,.45)",  "BESS charge"),
+            ("ev_kw",          C["ev"],   "rgba(96,165,250,.45)", "EV charger"),
+            ("grid_export_kw", C["grid"], "rgba(148,163,184,.4)", "Grid export"),
+        ]:
+            if col in hist.columns:
+                f5.add_trace(go.Scatter(
+                    x=hist["time"], y=hist[col],
+                    stackgroup="one", name=name,
+                    line=dict(color=color, width=1.5), fillcolor=fill,
+                    hovertemplate="%{y:.2f} kW<extra>" + name + "</extra>"))
+        if "total_gen_kw" in hist.columns:
+            f5.add_trace(go.Scatter(
+                x=hist["time"], y=hist["total_gen_kw"],
+                name="Total generation",
+                line=dict(color=C["solar"], width=2, dash="dot"),
+                hovertemplate="%{y:.2f} kW<extra>Total gen</extra>"))
+        f5.update_layout(**mk(height=260, yaxis_title="kW",
+            legend=dict(orientation="h", y=1.12, x=0, font_size=11)))
+        st.plotly_chart(f5, use_container_width=True)
+
+    # ── 3. H₂ trend + cumulative | Efficiency scatter + quality ───────────
+    p2a, p2b = st.columns(2)
+    with p2a:
+        st.markdown('<p class="sec-hdr">H₂ production rate — live trend</p>', unsafe_allow_html=True)
         if hd("h2_kg_h"):
-            st.markdown('<p class="sec-hdr">H₂ production rate</p>', unsafe_allow_html=True)
             f7 = go.Figure()
-            f7.add_trace(go.Bar(x=hist["time"], y=(hist["h2_kg_h"]*1000).round(2),
-                marker_color=C["h2"], marker_line_width=0, name="g/h"))
-            f7.update_layout(**mk(height=200, yaxis_title="g H₂/h"))
+            f7.add_trace(go.Scatter(
+                x=hist["time"], y=(hist["h2_kg_h"]*1000).round(2),
+                fill="tozeroy", fillcolor="rgba(14,165,233,.12)",
+                line=dict(color=C["h2"], width=2.5), name="g/h",
+                hovertemplate="%{y:.1f} g/h<extra></extra>"))
+            for ref_val, ref_lbl, ref_col in [
+                (Config.electrolyzer.h2_min_kg_h*1000,  "Min",  "#94a3b8"),
+                (Config.electrolyzer.h2_nom_kg_h*1000,  "Nom",  "#22c55e"),
+                (Config.electrolyzer.h2_peak_kg_h*1000, "Peak", "#f59e0b"),
+            ]:
+                f7.add_hline(y=ref_val, line_dash="dot", line_color=ref_col,
+                    line_width=1.2, annotation_text=ref_lbl,
+                    annotation_font_color=ref_col, annotation_font_size=10)
+            f7.update_layout(**mk(height=220, yaxis_title="g H₂/h"))
             st.plotly_chart(f7, use_container_width=True)
 
-        if hd("elec_eff_pct") and len(hist) > 5:
-            st.markdown('<p class="sec-hdr">Efficiency vs load</p>', unsafe_allow_html=True)
-            f8 = px.scatter(hist, x="elec_kw", y="elec_eff_pct", color="h2_kg_h",
-                color_continuous_scale=[[0,"#f8fafc"],[1,C["h2"]]],
-                labels={"elec_kw":"Power (kW)","elec_eff_pct":"η (%)"})
-            f8.update_layout(**mk(height=180))
+        st.markdown('<p class="sec-hdr">Session H₂ production</p>', unsafe_allow_html=True)
+        daily_target_kg = Config.electrolyzer.h2_peak_kg_h * 18
+        cum_pct = min(100.0, (s.cum_h2_kg / max(daily_target_kg, 1e-6)) * 100)
+        bar_col = "#22c55e" if cum_pct >= 50 else "#f59e0b" if cum_pct >= 20 else "#0ea5e9"
+        st.markdown(
+            f'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px">'
+            f'<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
+            f'<span style="font-size:13px;font-weight:600;color:#111827">{s.cum_h2_kg:.4f} kg produced</span>'
+            f'<span style="font-size:12px;color:#6b7280">Target: {daily_target_kg:.2f} kg/day</span>'
+            f'</div>'
+            f'<div style="background:#e2e8f0;border-radius:999px;height:12px;overflow:hidden">'
+            f'<div style="background:{bar_col};width:{cum_pct:.1f}%;height:100%;border-radius:999px"></div>'
+            f'</div>'
+            f'<div style="display:flex;justify-content:space-between;margin-top:6px">'
+            f'<span style="font-size:11px;color:#6b7280">{cum_pct:.1f}% of daily target</span>'
+            f'<span style="font-size:11px;color:#6b7280">CO₂ saved: {s.cum_co2_kg:.3f} kg vs SMR</span>'
+            f'</div></div>',
+            unsafe_allow_html=True)
+
+    with p2b:
+        st.markdown('<p class="sec-hdr">Efficiency vs load — S30/30 datasheet curve</p>', unsafe_allow_html=True)
+        if hd("elec_eff_pct") and len(hist) > 3:
+            import numpy as np_tab2
+            f8 = go.Figure()
+            ds_p  = sorted(Config.ELEC_EFF_CURVE.keys())
+            ds_e  = [Config.ELEC_EFF_CURVE[p] * 100 for p in ds_p]
+            p_line = np_tab2.linspace(Config.ELEC_P_MIN_KW, Config.ELEC_P_MAX_KW, 50)
+            e_line = np_tab2.interp(p_line, ds_p, ds_e)
+            f8.add_trace(go.Scatter(x=p_line, y=e_line, name="S30/30 datasheet",
+                line=dict(color="#cbd5e1", width=3),
+                hovertemplate="Datasheet η: %{y:.1f}%<extra></extra>"))
+            for p_pt, e_pt, pt_lbl in zip(ds_p, ds_e, ["Min 0.74kW","Nominal 3kW","Peak 5.63kW"]):
+                f8.add_trace(go.Scatter(x=[p_pt], y=[e_pt], mode="markers+text",
+                    marker=dict(color=C["elec"], size=10, line=dict(color="#fff",width=2)),
+                    text=[f"{e_pt:.0f}%"], textposition="top center",
+                    textfont=dict(size=10, color="#374151"),
+                    name=pt_lbl, showlegend=False))
+            f8.add_trace(go.Scatter(x=hist["elec_kw"], y=hist["elec_eff_pct"],
+                mode="markers", name="Live ticks",
+                marker=dict(color=hist["h2_kg_h"]*1000,
+                    colorscale=[[0,"#f0f9ff"],[0.5,C["h2"]],[1,"#0369a1"]],
+                    size=6, opacity=0.75,
+                    colorbar=dict(title="g/h", thickness=10, len=0.6),
+                    line=dict(color="#ffffff", width=0.5)),
+                hovertemplate="Load: %{x:.2f} kW  η: %{y:.1f}%<extra></extra>"))
+            f8.add_trace(go.Scatter(x=[s.elec_kw], y=[s.elec_eff_pct],
+                mode="markers", name="Now",
+                marker=dict(color=C["fc"], size=14, symbol="star",
+                    line=dict(color="#fff",width=2)),
+                hovertemplate=f"Now: {s.elec_kw:.2f} kW  η={s.elec_eff_pct:.1f}%<extra></extra>"))
+            f8.update_layout(**mk(height=260,
+                xaxis_title="Electrolyzer power (kW)",
+                yaxis_title="Efficiency η (%)",
+                xaxis=dict(range=[0, Config.ELEC_P_MAX_KW + 0.3]),
+                yaxis=dict(range=[50, 95]),
+                legend=dict(orientation="h", y=1.1, font_size=10)))
             st.plotly_chart(f8, use_container_width=True)
 
-        ec = st.columns(3)
-        ec[0].metric("Purity",    f"{s.elec_purity:.4f}%", "ISO 14687")
-        ec[1].metric("Water use", f"{s.water_l_h:.3f} L/h")
-        ec[2].metric("Heat rec.", f"{s.heat_kw:.2f} kW")
+        st.markdown('<p class="sec-hdr">Process quality</p>', unsafe_allow_html=True)
+        qc = st.columns(3)
+        pur_ok = s.elec_purity >= 99.95
+        wat_lim = Config.WATER_CONSUMPTION_L_KG * Config.electrolyzer.h2_nom_kg_h * 1.1
+        kpi(qc[0], "H₂ Purity", f"{s.elec_purity:.4f}%",
+            "✅ AIRCELL spec" if pur_ok else "⚠ Below 99.95%",
+            "kpi-green" if pur_ok else "kpi-red")
+        kpi(qc[1], "Water use", f"{s.water_l_h:.3f} L/h",
+            f"Spec: {Config.WATER_CONSUMPTION_L_KG:.1f} L/kg",
+            "kpi-cyan" if s.water_l_h <= wat_lim else "kpi-amber")
+        kpi(qc[2], "Heat recovery", f"{s.heat_kw:.3f} kW",
+            f"{Config.HEAT_RECOVERY_FACTOR*100:.0f}% recovered",
+            "kpi-green" if s.heat_kw > 0 else "kpi-gray")
 
 # ─── TAB 3: STORAGE ────────────────────────────────────────────────────────
 with tabs[2]:
