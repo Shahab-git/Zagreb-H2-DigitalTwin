@@ -1188,56 +1188,282 @@ with tabs[4]:
     else:
         wr = sub["water"]; o2 = sub["oxygen"]
         dr = sub["dryer"]; wu = sub["warmup"]
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown('<p class="sec-hdr">Water treatment (DIN ISO 3696 Type 1)</p>',
+
+        # ── KPI strip — all 4 subsystems at a glance ───────────────────────
+        sk5 = st.columns(5)
+        kpi(sk5[0], "Water Quality",
+            f"{wr.conductivity_us_cm:.4f} µS/cm",
+            "✅ DIN Type 1" if wr.quality_ok else "❌ Out of spec",
+            "kpi-green" if wr.quality_ok else "kpi-red")
+        kpi(sk5[1], "H₂ Moisture",
+            f"{dr.moisture_ppm:.2f} ppm",
+            "✅ AIRCELL spec" if dr.moisture_ppm <= 5 else "❌ >5 ppm",
+            "kpi-green" if dr.moisture_ppm <= 5 else "kpi-red")
+        kpi(sk5[2], "O₂ Pressure",
+            f"{o2.o2_pressure_bar:.3f} bar",
+            "✅ Safe <0.5 bar" if o2.safety_ok else "❌ High pressure",
+            "kpi-green" if o2.safety_ok else "kpi-red")
+        kpi(sk5[3], "Stack Temperature",
+            f"{wu.current_temp_c:.1f}°C",
+            f"{'● WARM' if wu.is_warm else f'⟳ {wu.warmup_time_min:.1f} min left'}",
+            "kpi-green" if wu.is_warm else "kpi-amber")
+        kpi(sk5[4], "Aux Power",
+            f"{sub['aux_power_kw']:.3f} kW",
+            "Pump + UV + dryer + heater",
+            "kpi-blue")
+
+        # ── Row 1: Water + O₂ | Dryer + Warmup ────────────────────────────
+        s5a, s5b = st.columns(2)
+        with s5a:
+            # Water treatment card
+            st.markdown('<p class="sec-hdr">💧 Water treatment — DIN ISO 3696 Type 1</p>',
                         unsafe_allow_html=True)
-            wc = st.columns(2)
-            kpi(wc[0],"Conductivity",f"{wr.conductivity_us_cm:.4f} µS/cm","Target < 0.1 µS/cm",
+            wc5 = st.columns(2)
+            kpi(wc5[0], "Conductivity",
+                f"{wr.conductivity_us_cm:.4f} µS/cm",
+                "Target < 0.1 µS/cm",
                 "kpi-green" if wr.quality_ok else "kpi-red")
-            kpi(wc[1],"Resistance",f"{wr.resistance_mohm_cm:.1f} MΩ·cm","Target > 10 MΩ·cm",
-                "kpi-green" if wr.resistance_mohm_cm>=10 else "kpi-red")
-            st.progress(min(wr.resin_saturation_pct/100,1.0))
-            resin_cls = "badge-red" if wr.resin_warning else "badge-green"
+            kpi(wc5[1], "Resistance",
+                f"{wr.resistance_mohm_cm:.1f} MΩ·cm",
+                "Target > 10 MΩ·cm",
+                "kpi-green" if wr.resistance_mohm_cm >= 10 else "kpi-red")
+
+            # Resin saturation bar
+            resin_col = "#22c55e" if not wr.resin_warning else "#ef4444"
             st.markdown(
-                f'<span style="color:#374151;font-size:13px;font-weight:500">Resin: {wr.resin_saturation_pct:.1f}% </span>'
-                f'<span class="badge {resin_cls}">{"⚠ REPLACE SOON" if wr.resin_warning else "● OK"}</span>',
+                f'<div style="margin:10px 0 4px">'
+                f'<div style="display:flex;justify-content:space-between;'
+                f'font-size:12px;color:#374151;margin-bottom:5px">'
+                f'<span style="font-weight:500">Ion exchange resin</span>'
+                f'<span style="font-weight:600">{wr.resin_saturation_pct:.1f}%</span>'
+                f'</div>'
+                f'<div style="background:#e2e8f0;border-radius:999px;height:10px;overflow:hidden">'
+                f'<div style="background:{resin_col};width:{wr.resin_saturation_pct:.1f}%;'
+                f'height:100%;border-radius:999px"></div></div>'
+                f'<div style="font-size:11px;color:{"#b91c1c" if wr.resin_warning else "#64748b"};'
+                f'margin-top:4px">{"⚠ Replace resin soon (>80% saturated)" if wr.resin_warning else "● OK — resin within capacity"}</div>'
+                f'</div>',
                 unsafe_allow_html=True)
-            st.markdown('<p class="sec-hdr">O₂ management</p>', unsafe_allow_html=True)
-            oc = st.columns(3)
-            kpi(oc[0],"O₂ Flow",    f"{o2.o2_flow_nm3_h:.4f}","Nm³/h","kpi-amber")
-            kpi(oc[1],"O₂ Pressure",f"{o2.o2_pressure_bar:.3f}","bar (max 0.5)",
-                "kpi-green" if o2.safety_ok else "kpi-red")
-            kpi(oc[2],"Vented",     f"{o2.vented_nm3_h:.4f}","Nm³/h to atm","kpi-blue")
-        with c2:
-            st.markdown('<p class="sec-hdr">H₂ dryer (target < 5 ppm moisture)</p>',
+
+            # O₂ management
+            st.markdown('<p class="sec-hdr">⬆ O₂ management (S30/30 by-product)</p>',
                         unsafe_allow_html=True)
-            dc = st.columns(2)
-            kpi(dc[0],"H₂ Moisture",f"{dr.moisture_ppm:.3f} ppm","AIRCELL req: < 5 ppm",
-                "kpi-green" if dr.moisture_ppm<=5 else "kpi-red")
-            kpi(dc[1],"Dew Point",  f"{dr.dew_point_c:.1f}°C",f"H₂ loss {dr.h2_loss_pct:.2f}%","kpi-blue")
-            st.progress(min(dr.desiccant_pct/100,1.0))
-            desc_cls = "badge-red" if dr.desiccant_warning else "badge-green"
+
+            # O₂ flow diagram
+            o2_bar_w = min(100, o2.o2_pressure_bar / 0.5 * 100)
+            o2_col   = "#22c55e" if o2.safety_ok else "#ef4444"
             st.markdown(
-                f'<span style="color:#374151;font-size:13px;font-weight:500">Desiccant: {dr.desiccant_pct:.1f}% </span>'
-                f'<span class="badge {desc_cls}">{"⚠ REGENERATE" if dr.desiccant_warning else "● OK"}</span>',
+                f'<div style="background:#fff7ed;border:1px solid #fed7aa;'
+                f'border-radius:10px;padding:12px 14px">'
+                f'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;'
+                f'text-align:center">'
+                f'<div><div style="font-size:10px;color:#92400e;font-weight:600;'
+                f'text-transform:uppercase">O₂ Flow</div>'
+                f'<div style="font-size:18px;font-weight:700;color:#111827">'
+                f'{o2.o2_flow_nm3_h:.4f}</div>'
+                f'<div style="font-size:10px;color:#64748b">Nm³/h</div></div>'
+                f'<div><div style="font-size:10px;color:#92400e;font-weight:600;'
+                f'text-transform:uppercase">Pressure</div>'
+                f'<div style="font-size:18px;font-weight:700;'
+                f'color:{"#15803d" if o2.safety_ok else "#b91c1c"}">'
+                f'{o2.o2_pressure_bar:.3f}</div>'
+                f'<div style="font-size:10px;color:#64748b">bar (max 0.5)</div></div>'
+                f'<div><div style="font-size:10px;color:#92400e;font-weight:600;'
+                f'text-transform:uppercase">Vented</div>'
+                f'<div style="font-size:18px;font-weight:700;color:#111827">'
+                f'{o2.vented_nm3_h:.4f}</div>'
+                f'<div style="font-size:10px;color:#64748b">Nm³/h to atm</div></div>'
+                f'</div>'
+                f'<div style="margin-top:10px">'
+                f'<div style="background:#e2e8f0;border-radius:999px;height:8px;overflow:hidden">'
+                f'<div style="background:{o2_col};width:{o2_bar_w:.1f}%;height:100%;'
+                f'border-radius:999px"></div></div>'
+                f'<div style="font-size:10px;color:#64748b;margin-top:3px">'
+                f'Pressure: {o2.o2_pressure_bar:.3f} / 0.5 bar limit</div>'
+                f'</div></div>',
                 unsafe_allow_html=True)
-            st.markdown('<p class="sec-hdr">Electrolyzer warm-up (S30/30)</p>',
+
+        with s5b:
+            # H₂ dryer card
+            st.markdown('<p class="sec-hdr">🔵 H₂ dryer — PSA desiccant</p>',
                         unsafe_allow_html=True)
-            wuc = st.columns(2)
-            wu_cls = "kpi-green" if wu.is_warm else "kpi-amber"
-            kpi(wuc[0],"Stack Temperature",f"{wu.current_temp_c:.1f}°C",
-                f"Target {wu.target_temp_c}°C", wu_cls)
-            kpi(wuc[1],"Efficiency Factor",f"×{wu.efficiency_factor:.3f}",
-                "Cold start penalty" if wu.cold_start else "Nominal", wu_cls)
-            warm_cls = "badge-green" if wu.is_warm else "badge-amber"
+            dc5 = st.columns(2)
+            kpi(dc5[0], "Outlet moisture",
+                f"{dr.moisture_ppm:.3f} ppm",
+                "AIRCELL req: < 5 ppm",
+                "kpi-green" if dr.moisture_ppm <= 5 else "kpi-red")
+            kpi(dc5[1], "Dew point",
+                f"{dr.dew_point_c:.1f}°C",
+                f"H₂ loss {dr.h2_loss_pct:.2f}%",
+                "kpi-blue")
+
+            # Desiccant saturation bar
+            desc_col = "#22c55e" if not dr.desiccant_warning else "#ef4444"
             st.markdown(
-                f'<span style="color:#374151;font-size:13px;font-weight:500">Stack: </span>'
-                f'<span class="badge {warm_cls}">{"● WARM — READY" if wu.is_warm else f"⟳ WARMING ({wu.warmup_time_min:.1f} min)"}</span>',
+                f'<div style="margin:10px 0 4px">'
+                f'<div style="display:flex;justify-content:space-between;'
+                f'font-size:12px;color:#374151;margin-bottom:5px">'
+                f'<span style="font-weight:500">Desiccant bed saturation</span>'
+                f'<span style="font-weight:600">{dr.desiccant_pct:.1f}%</span>'
+                f'</div>'
+                f'<div style="background:#e2e8f0;border-radius:999px;height:10px;overflow:hidden">'
+                f'<div style="background:{desc_col};width:{dr.desiccant_pct:.1f}%;'
+                f'height:100%;border-radius:999px"></div></div>'
+                f'<div style="font-size:11px;color:{"#b91c1c" if dr.desiccant_warning else "#64748b"};'
+                f'margin-top:4px">{"⚠ Regenerate desiccant (>85% saturated)" if dr.desiccant_warning else "● OK — desiccant within capacity"}</div>'
+                f'</div>',
                 unsafe_allow_html=True)
-            st.markdown('<p class="sec-hdr">Auxiliary power</p>', unsafe_allow_html=True)
-            st.metric("Total aux load", f"{sub['aux_power_kw']:.3f} kW",
-                      help="Water pump + UV + dryer heater + stack heater")
+
+            # Electrolyzer warm-up card
+            st.markdown('<p class="sec-hdr">🌡 Electrolyzer thermal — S30/30 warm-up</p>',
+                        unsafe_allow_html=True)
+
+            # Temperature progress bar (20°C min → 55°C optimal → 70°C max)
+            t_pct = min(100, max(0, (wu.current_temp_c - 20) / (70 - 20) * 100))
+            t_col = "#22c55e" if wu.is_warm else "#f59e0b" if wu.current_temp_c > 15 else "#3b82f6"
+            st.markdown(
+                f'<div style="background:#f0fdf4;border:1px solid #86efac;'
+                f'border-radius:10px;padding:12px 14px">'
+                f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;'
+                f'margin-bottom:10px">'
+                f'<div style="text-align:center">'
+                f'<div style="font-size:10px;color:#15803d;font-weight:600;'
+                f'text-transform:uppercase">Stack Temp</div>'
+                f'<div style="font-size:24px;font-weight:700;color:#111827">'
+                f'{wu.current_temp_c:.1f}°C</div>'
+                f'<div style="font-size:10px;color:#64748b">Target: {wu.target_temp_c}°C</div>'
+                f'</div>'
+                f'<div style="text-align:center">'
+                f'<div style="font-size:10px;color:#15803d;font-weight:600;'
+                f'text-transform:uppercase">Eff. Factor</div>'
+                f'<div style="font-size:24px;font-weight:700;color:#111827">'
+                f'×{wu.efficiency_factor:.3f}</div>'
+                f'<div style="font-size:10px;color:{"#64748b" if not wu.cold_start else "#b45309"}">'
+                f'{"Nominal" if not wu.cold_start else "Cold start penalty"}</div>'
+                f'</div>'
+                f'</div>'
+                f'<div style="background:#e2e8f0;border-radius:999px;height:10px;overflow:hidden">'
+                f'<div style="background:{t_col};width:{t_pct:.1f}%;height:100%;'
+                f'border-radius:999px"></div></div>'
+                f'<div style="display:flex;justify-content:space-between;'
+                f'font-size:10px;color:#64748b;margin-top:3px">'
+                f'<span>20°C min</span><span>55°C optimal</span><span>70°C max</span>'
+                f'</div>'
+                f'<div style="margin-top:8px;text-align:center">'
+                f'<span style="background:{"#dcfce7" if wu.is_warm else "#fef9c3"};'
+                f'color:{"#15803d" if wu.is_warm else "#92400e"};'
+                f'font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px">'
+                f'{"● WARM — READY FOR RATED OPERATION" if wu.is_warm else f"⟳ WARMING UP — {wu.warmup_time_min:.1f} min remaining"}'
+                f'</span></div>'
+                f'</div>',
+                unsafe_allow_html=True)
+
+        # ── Row 2: Subsystem health summary (full width) ───────────────────
+        st.markdown('<p class="sec-hdr">Subsystem health overview</p>',
+                    unsafe_allow_html=True)
+        subsys_html = f"""<!DOCTYPE html><html><body style="margin:0;padding:8px;
+font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
+      letter-spacing:.06em;margin-bottom:10px">💧 Water Treatment</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">Conductivity</span>
+        <span style="color:{"#15803d" if wr.quality_ok else "#b91c1c"};font-weight:600">
+          {wr.conductivity_us_cm:.4f} µS/cm</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">Flow rate</span>
+        <span style="color:#111827;font-weight:600">{wr.purified_l_h:.3f} L/h</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">Power draw</span>
+        <span style="color:#111827;font-weight:600">{wr.power_kw:.3f} kW</span>
+      </div>
+      <div style="margin-top:4px;padding:4px 8px;border-radius:6px;text-align:center;
+        background:{"#dcfce7" if wr.quality_ok else "#fee2e2"};
+        color:{"#15803d" if wr.quality_ok else "#b91c1c"};font-size:11px;font-weight:600">
+        {"✅ WITHIN SPEC" if wr.quality_ok else "❌ OUT OF SPEC"}</div>
+    </div>
+  </div>
+
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
+      letter-spacing:.06em;margin-bottom:10px">⬆ Oxygen Handler</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">O₂ produced</span>
+        <span style="color:#111827;font-weight:600">{o2.o2_flow_nm3_h:.4f} Nm³/h</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">Outlet pressure</span>
+        <span style="color:{"#15803d" if o2.safety_ok else "#b91c1c"};font-weight:600">
+          {o2.o2_pressure_bar:.3f} bar</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">Vented to atm</span>
+        <span style="color:#111827;font-weight:600">{o2.vented_nm3_h:.4f} Nm³/h</span>
+      </div>
+      <div style="margin-top:4px;padding:4px 8px;border-radius:6px;text-align:center;
+        background:{"#dcfce7" if o2.safety_ok else "#fee2e2"};
+        color:{"#15803d" if o2.safety_ok else "#b91c1c"};font-size:11px;font-weight:600">
+        {"✅ PRESSURE SAFE" if o2.safety_ok else "❌ PRESSURE HIGH"}</div>
+    </div>
+  </div>
+
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
+      letter-spacing:.06em;margin-bottom:10px">🔵 H₂ Dryer</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">Moisture out</span>
+        <span style="color:{"#15803d" if dr.moisture_ppm<=5 else "#b91c1c"};font-weight:600">
+          {dr.moisture_ppm:.3f} ppm</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">Dew point</span>
+        <span style="color:#111827;font-weight:600">{dr.dew_point_c:.1f}°C</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">H₂ loss</span>
+        <span style="color:#111827;font-weight:600">{dr.h2_loss_pct:.2f}%</span>
+      </div>
+      <div style="margin-top:4px;padding:4px 8px;border-radius:6px;text-align:center;
+        background:{"#dcfce7" if dr.moisture_ppm<=5 else "#fee2e2"};
+        color:{"#15803d" if dr.moisture_ppm<=5 else "#b91c1c"};font-size:11px;font-weight:600">
+        {"✅ AIRCELL SPEC MET" if dr.moisture_ppm<=5 else "❌ MOISTURE HIGH"}</div>
+    </div>
+  </div>
+
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px">
+    <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
+      letter-spacing:.06em;margin-bottom:10px">🌡 Stack Thermal</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">Temperature</span>
+        <span style="color:{"#15803d" if wu.is_warm else "#92400e"};font-weight:600">
+          {wu.current_temp_c:.1f}°C</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">Efficiency ×</span>
+        <span style="color:#111827;font-weight:600">{wu.efficiency_factor:.3f}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:#374151">Heater draw</span>
+        <span style="color:#111827;font-weight:600">{wu.power_consumed_kw:.3f} kW</span>
+      </div>
+      <div style="margin-top:4px;padding:4px 8px;border-radius:6px;text-align:center;
+        background:{"#dcfce7" if wu.is_warm else "#fef9c3"};
+        color:{"#15803d" if wu.is_warm else "#92400e"};font-size:11px;font-weight:600">
+        {"✅ WARM — READY" if wu.is_warm else f"⟳ WARMING {wu.warmup_time_min:.1f} min"}</div>
+    </div>
+  </div>
+
+</div>
+</body></html>"""
+        components.html(subsys_html, height=195, scrolling=False)
 
 # ─── TAB 6: ANNUAL SIMULATION ──────────────────────────────────────────────
 with tabs[5]:
