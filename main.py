@@ -496,9 +496,9 @@ with tabs[0]:
         result=fc_res,
         current_dt=now_dt,
         last_24h_irradiance=last_24h,
-        height=1000,
+        height=850,
     )
-    components.html(html_panel, height=1000, scrolling=False)
+    components.html(html_panel, height=680, scrolling=False)
 
 # ─── TAB 2: PRODUCTION ─────────────────────────────────────────────────────
 with tabs[1]:
