@@ -354,7 +354,7 @@ with tabs[0]:
             values=[max(.01,s.solar_kw), max(.01,s.wind_kw), max(.01,s.grid_import_kw)],
             labels=["Solar PV","Wind","Grid Import"], hole=0.65,
             marker=dict(colors=[C["solar"],C["wind"],C["grid"]],
-                        line=dict(color="#0f172a",width=2))))
+                        line=dict(color="#ffffff",width=2))))
         fig.add_annotation(text=f"<b>{s.total_gen_kw:.1f}</b><br>kW",
                            showarrow=False, font=dict(size=14,color="#111827"),
                            x=0.5, y=0.5, xref="paper", yref="paper")
