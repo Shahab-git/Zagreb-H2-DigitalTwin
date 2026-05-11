@@ -935,45 +935,250 @@ with tabs[2]:
 
 # ─── TAB 4: DISTRIBUTION ───────────────────────────────────────────────────
 with tabs[3]:
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown('<p class="sec-hdr">HRS 5 kg station</p>', unsafe_allow_html=True)
-        st.progress(min(s.hrs_pct/100,1.0))
-        hrs_c = "badge-green" if s.hrs_pct > 60 else "badge-amber"
-        st.markdown(
-            f'<span style="color:#374151;font-size:13px;font-weight:500">{s.hrs_pct:.1f}% · </span>'
-            f'<span class="badge {hrs_c}">{"● READY" if s.hrs_pct>60 else "▼ FILLING"}</span>',
-            unsafe_allow_html=True)
-        f14 = go.Figure(go.Indicator(
-            mode="gauge+number", value=s.fc_kw,
-            title={"text":f"AIRCELL 3000 Output (kW) · η={s.fc_eff_pct:.1f}%",
-                   "font":{"color":"#111827"}},
-            number={"font":{"color":"#111827"}},
-            gauge={"axis":{"range":[0,Config.FC_POWER_NOM_KW*1.1],"tickcolor":"#374151"},
-                   "bar":{"color":C["bess"]},"bgcolor":"#f8fafc"}))
-        f14.update_layout(**mk(height=220))
-        st.plotly_chart(f14, use_container_width=True)
 
-    with c2:
+    # ── 1. KPI strip ───────────────────────────────────────────────────────
+    dk = st.columns(5)
+    fc_cls  = "kpi-green" if s.fc_kw > 0 else "kpi-gray"
+    hrs_cls = "kpi-green" if s.hrs_pct > 60 else "kpi-amber" if s.hrs_pct > 20 else "kpi-red"
+    ev_cls  = "kpi-cyan"  if s.ev_kw  > 0 else "kpi-gray"
+    exp_cls = "kpi-blue"  if s.grid_export_kw > 0 else "kpi-gray"
+    kpi(dk[0], "Fuel Cell Output",  f"{s.fc_kw:.2f} kW",
+        f"η {s.fc_eff_pct:.1f}% · AIRCELL 3000", fc_cls)
+    kpi(dk[1], "HRS Station",
+        f"{s.hrs_pct:.1f}%",
+        f"{'● READY' if s.hrs_pct > 60 else '▼ FILLING'} · {s.hrs_pct/100*Config.HRS_H2_TANK_CAPACITY_KG:.2f} kg",
+        hrs_cls)
+    kpi(dk[2], "EV Charger",        f"{s.ev_kw:.2f} kW",
+        f"Via FC · {s.ev_kw/max(Config.EV_CHARGER_POWER_KW,0.01)*100:.0f}% of rated",
+        ev_cls)
+    kpi(dk[3], "Grid Export",       f"{s.grid_export_kw:.2f} kW",
+        f"€{s.grid_rev_eur:.4f}/tick · {Config.GRID_PRICE_SELL} €/kWh", exp_cls)
+    kpi(dk[4], "Session Revenue",   f"€{s.cum_revenue_eur:.2f}",
+        f"H₂ + subsidy + CO₂ + grid", "kpi-green")
+
+    # ── 2. Energy flow diagram + Revenue waterfall ─────────────────────────
+    d2a, d2b = st.columns(2)
+    with d2a:
+        st.markdown('<p class="sec-hdr">Energy distribution — this tick</p>',
+                    unsafe_allow_html=True)
+        # Energy flow: where is power going right now
+        total_out = max(s.fc_kw + s.grid_export_kw + s.heat_kw + s.ev_kw, 0.01)
+        fc_pct    = s.fc_kw          / total_out * 100
+        grid_pct  = s.grid_export_kw / total_out * 100
+        heat_pct  = s.heat_kw        / total_out * 100
+        ev_pct    = s.ev_kw          / total_out * 100
+
+        _flow_html = f"""<!DOCTYPE html><html><body style="margin:0;padding:8px;
+font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="display:flex;flex-direction:column;gap:10px">
+
+  <div style="display:flex;align-items:center;gap:10px">
+    <span style="font-size:12px;color:#374151;min-width:110px;font-weight:500">⚡ Fuel Cell</span>
+    <div style="flex:1;background:#e2e8f0;border-radius:999px;height:14px;overflow:hidden">
+      <div style="width:{fc_pct:.1f}%;background:#22c55e;height:100%;border-radius:999px;
+        transition:width .4s"></div>
+    </div>
+    <span style="font-size:12px;color:#111827;min-width:70px;text-align:right;font-weight:600">
+      {s.fc_kw:.2f} kW</span>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px">
+    <span style="font-size:12px;color:#374151;min-width:110px;font-weight:500">🔌 EV Charger</span>
+    <div style="flex:1;background:#e2e8f0;border-radius:999px;height:14px;overflow:hidden">
+      <div style="width:{ev_pct:.1f}%;background:#60a5fa;height:100%;border-radius:999px;
+        transition:width .4s"></div>
+    </div>
+    <span style="font-size:12px;color:#111827;min-width:70px;text-align:right;font-weight:600">
+      {s.ev_kw:.2f} kW</span>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px">
+    <span style="font-size:12px;color:#374151;min-width:110px;font-weight:500">🌐 Grid Export</span>
+    <div style="flex:1;background:#e2e8f0;border-radius:999px;height:14px;overflow:hidden">
+      <div style="width:{grid_pct:.1f}%;background:#94a3b8;height:100%;border-radius:999px;
+        transition:width .4s"></div>
+    </div>
+    <span style="font-size:12px;color:#111827;min-width:70px;text-align:right;font-weight:600">
+      {s.grid_export_kw:.2f} kW</span>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px">
+    <span style="font-size:12px;color:#374151;min-width:110px;font-weight:500">♨ Heat Recovery</span>
+    <div style="flex:1;background:#e2e8f0;border-radius:999px;height:14px;overflow:hidden">
+      <div style="width:{heat_pct:.1f}%;background:#f59e0b;height:100%;border-radius:999px;
+        transition:width .4s"></div>
+    </div>
+    <span style="font-size:12px;color:#111827;min-width:70px;text-align:right;font-weight:600">
+      {s.heat_kw:.2f} kW</span>
+  </div>
+
+  <div style="margin-top:4px;padding-top:10px;border-top:1px solid #e2e8f0;
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">
+    <span style="font-size:11px;color:#64748b">
+      H₂ consumed by FC: <b>{s.fc_kw * Config.FC_H2_CONSUMPTION_KG_KWH * 1000:.2f} g/h</b>
+    </span>
+    <span style="font-size:11px;color:#64748b">
+      FC shortage: <b>{"⚠ YES" if s.fc_h2_shortage else "✅ No"}</b>
+    </span>
+  </div>
+</div>
+</body></html>"""
+        components.html(_flow_html, height=200, scrolling=False)
+
+    with d2b:
+        st.markdown('<p class="sec-hdr">Revenue breakdown — session cumulative</p>',
+                    unsafe_allow_html=True)
+        # Revenue waterfall — horizontal bars
+        dt_h      = Config.TIMESTEP_SEC / 3600
+        h2_rev    = s.h2_kg_h * dt_h * 6.0          # approx H₂ market price
+        subsidy   = s.subsidy_eur
+        carbon    = s.carbon_rev_eur
+        grid_rev  = s.grid_rev_eur
+        rev_items = [
+            ("H₂ Sales",      h2_rev,   C["h2"]),
+            ("EU Subsidy",     subsidy,  C["bess"]),
+            ("Carbon Credits", carbon,   C["co2"]),
+            ("Grid Export",    grid_rev, C["grid"]),
+        ]
+        total_rev = max(sum(v for _,v,_ in rev_items), 1e-9)
+        f_rev = go.Figure()
+        for i, (lbl, val, col_) in enumerate(rev_items):
+            f_rev.add_trace(go.Bar(
+                x=[val], y=[lbl], orientation="h",
+                marker_color=col_, marker_line_width=0,
+                text=[f"€{val:.5f}"],
+                textposition="outside",
+                textfont=dict(color="#111827", size=11),
+                name=lbl, showlegend=False,
+                hovertemplate=f"{lbl}: €%{{x:.5f}}<extra></extra>"))
+        f_rev.update_layout(**mk(height=200,
+            xaxis_title="€ per tick",
+            xaxis=dict(showgrid=True),
+            yaxis=dict(autorange="reversed"),
+            barmode="overlay",
+            margin=dict(t=10, b=30, l=100, r=80)))
+        st.plotly_chart(f_rev, use_container_width=True)
+
+    # ── 3. FC trend + HRS tracker | Grid export trend ─────────────────────
+    d3a, d3b = st.columns(2)
+    with d3a:
+        st.markdown('<p class="sec-hdr">Fuel cell — output & H₂ consumption</p>',
+                    unsafe_allow_html=True)
+        if hd("fc_kw"):
+            f14 = go.Figure()
+            f14.add_trace(go.Scatter(
+                x=hist["time"], y=hist["fc_kw"],
+                fill="tozeroy", fillcolor="rgba(34,197,94,.10)",
+                line=dict(color=C["bess"], width=2), name="FC output (kW)",
+                hovertemplate="%{y:.2f} kW<extra>FC output</extra>"))
+            # H₂ consumption on secondary axis
+            h2_consumed = hist["fc_kw"] * Config.FC_H2_CONSUMPTION_KG_KWH * 1000
+            f14.add_trace(go.Scatter(
+                x=hist["time"], y=h2_consumed,
+                line=dict(color=C["h2"], width=1.5, dash="dot"),
+                name="H₂ consumed (g/h)", yaxis="y2",
+                hovertemplate="%{y:.1f} g/h<extra>H₂ consumed</extra>"))
+            f14.add_hline(y=Config.FC_POWER_NOM_KW, line_dash="dot",
+                line_color="#94a3b8", line_width=1,
+                annotation_text="Rated 3kW",
+                annotation_font_size=10, annotation_font_color="#94a3b8")
+            f14.update_layout(**mk(height=220,
+                yaxis=dict(title="kW", range=[0, Config.FC_POWER_NOM_KW * 1.2]),
+                yaxis2=dict(title="g H₂/h", overlaying="y", side="right",
+                            color=C["h2"],
+                            range=[0, Config.FC_H2_CONSUMPTION_KG_KWH*1000
+                                   * Config.FC_POWER_NOM_KW * 1.2]),
+                legend=dict(orientation="h", y=1.1, font_size=10)))
+            st.plotly_chart(f14, use_container_width=True)
+
+        # HRS dispensing tracker
+        st.markdown('<p class="sec-hdr">HRS dispensing tracker</p>',
+                    unsafe_allow_html=True)
+        hrs_kg_dispensed = s.cum_h2_kg * 0.30   # ~30% goes to HRS
+        vehicles_served  = int(hrs_kg_dispensed / 5.0)
+        st.markdown(
+            f'<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;'
+            f'padding:12px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+            f'<div style="text-align:center">'
+            f'<div style="font-size:10px;color:#15803d;font-weight:600;'
+            f'text-transform:uppercase">HRS Fill</div>'
+            f'<div style="font-size:22px;font-weight:700;color:#111827">{s.hrs_pct:.0f}%</div>'
+            f'<div style="font-size:10px;color:#64748b">'
+            f'{s.hrs_pct/100*Config.HRS_H2_TANK_CAPACITY_KG:.2f} kg</div>'
+            f'</div>'
+            f'<div style="text-align:center;border-left:1px solid #bbf7d0;'
+            f'border-right:1px solid #bbf7d0">'
+            f'<div style="font-size:10px;color:#15803d;font-weight:600;'
+            f'text-transform:uppercase">H₂ to HRS</div>'
+            f'<div style="font-size:22px;font-weight:700;color:#111827">'
+            f'{hrs_kg_dispensed:.3f}</div>'
+            f'<div style="font-size:10px;color:#64748b">kg session</div>'
+            f'</div>'
+            f'<div style="text-align:center">'
+            f'<div style="font-size:10px;color:#15803d;font-weight:600;'
+            f'text-transform:uppercase">Vehicles Est.</div>'
+            f'<div style="font-size:22px;font-weight:700;color:#111827">'
+            f'{vehicles_served}</div>'
+            f'<div style="font-size:10px;color:#64748b">× 5 kg fills</div>'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True)
+
+    with d3b:
         if hd("grid_export_kw"):
-            st.markdown('<p class="sec-hdr">Grid export vs EV load</p>', unsafe_allow_html=True)
+            st.markdown('<p class="sec-hdr">Grid export — trend & revenue</p>',
+                        unsafe_allow_html=True)
             f15 = go.Figure()
-            f15.add_trace(go.Scatter(x=hist["time"], y=hist["grid_export_kw"],
-                fill="tozeroy", fillcolor="rgba(148,163,184,.2)",
-                line=dict(color=C["grid"],width=2), name="Grid export"))
-            f15.add_trace(go.Scatter(x=hist["time"], y=hist["ev_kw"],
-                fill="tozeroy", fillcolor="rgba(96,165,250,.2)",
-                line=dict(color=C["ev"],width=2), name="EV load"))
-            f15.update_layout(**mk(height=210, yaxis_title="kW"))
+            f15.add_trace(go.Scatter(
+                x=hist["time"], y=hist["grid_export_kw"],
+                fill="tozeroy", fillcolor="rgba(148,163,184,.15)",
+                line=dict(color=C["grid"], width=2), name="Grid export",
+                hovertemplate="%{y:.2f} kW<extra>Grid export</extra>"))
+            if "ev_kw" in hist.columns:
+                f15.add_trace(go.Scatter(
+                    x=hist["time"], y=hist["ev_kw"],
+                    fill="tozeroy", fillcolor="rgba(96,165,250,.15)",
+                    line=dict(color=C["ev"], width=2), name="EV load",
+                    hovertemplate="%{y:.2f} kW<extra>EV</extra>"))
+            # Cumulative grid revenue annotation
+            cum_grid_rev = (hist["grid_export_kw"].sum()
+                            * Config.TIMESTEP_SEC / 3600
+                            * Config.GRID_PRICE_SELL
+                            if "grid_export_kw" in hist.columns else 0)
+            f15.add_annotation(
+                x=0.98, y=0.95, xref="paper", yref="paper",
+                text=f"Cum. grid revenue: €{cum_grid_rev:.4f}",
+                showarrow=False,
+                font=dict(size=11, color="#374151"),
+                bgcolor="rgba(255,255,255,0.85)",
+                bordercolor="#e2e8f0", borderwidth=1)
+            f15.update_layout(**mk(height=220, yaxis_title="kW",
+                legend=dict(orientation="h", y=1.1, font_size=10)))
             st.plotly_chart(f15, use_container_width=True)
+
+        # Downstream split donut
+        st.markdown('<p class="sec-hdr">Output energy split</p>',
+                    unsafe_allow_html=True)
         f16 = go.Figure(go.Pie(
-            values=[max(.01,s.ev_kw), max(.01,s.grid_export_kw), max(.01,s.heat_kw)],
-            labels=["EV Charging","Grid Export","Heat Recovery"],
-            hole=0.55,
-            marker=dict(colors=[C["ev"],C["grid"],C["solar"]],
-                        line=dict(color="#ffffff",width=2))))
+            values=[max(.001, s.ev_kw),
+                    max(.001, s.grid_export_kw),
+                    max(.001, s.heat_kw),
+                    max(.001, s.fc_kw)],
+            labels=["EV Charging", "Grid Export", "Heat Recovery", "Fuel Cell"],
+            hole=0.58,
+            marker=dict(
+                colors=[C["ev"], C["grid"], C["solar"], C["bess"]],
+                line=dict(color="#ffffff", width=2)),
+            textinfo="label+percent",
+            textfont=dict(color="#111827", size=11),
+            hovertemplate="%{label}: %{value:.3f} kW<extra></extra>"))
+        f16.add_annotation(
+            text=f"<b>{s.fc_kw + s.ev_kw + s.grid_export_kw + s.heat_kw:.2f}</b><br>kW total",
+            showarrow=False, font=dict(size=12, color="#111827"),
+            x=0.5, y=0.5, xref="paper", yref="paper")
         f16.update_layout(**mk(height=210,
-            legend=dict(orientation="h",y=-0.15,font_size=11)))
+            legend=dict(orientation="h", y=-0.12, font_size=10),
+            margin=dict(t=10, b=40, l=10, r=10)))
         st.plotly_chart(f16, use_container_width=True)
 
 # ─── TAB 5: SUBSYSTEMS ─────────────────────────────────────────────────────
