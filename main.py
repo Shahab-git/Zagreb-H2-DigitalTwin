@@ -130,15 +130,33 @@ C = dict(
     co2="#22c55e", water="#3b82f6", o2="#f59e0b",
 )
 def mk(**kw):
-    """Build Plotly layout — enforces black axis labels on every chart."""
-    base = {**PLOT}
+    """Build Plotly layout — enforces black axis labels and titles on every chart."""
+    _FONT = dict(color="#111827", size=12)
+    base  = {**PLOT}
+
+    # Convert shortcut title strings → proper title dicts with black font
+    for short_key, ax_key in [
+        ("xaxis_title", "xaxis"), ("yaxis_title", "yaxis"),
+        ("xaxis2_title","xaxis2"),("yaxis2_title","yaxis2"),
+    ]:
+        if short_key in kw:
+            title_text = kw.pop(short_key)
+            existing   = kw.get(ax_key, {})
+            kw[ax_key] = {**existing,
+                          "title": {"text": title_text, "font": _FONT}}
+
     # Inject black axis style; caller overrides take precedence
     for ax_key in ("xaxis", "yaxis", "xaxis2", "yaxis2"):
         if ax_key in kw:
             caller = kw.pop(ax_key)
+            # Ensure title has black font even if caller passed a plain string
+            if "title" in caller and isinstance(caller["title"], str):
+                caller["title"] = {"text": caller["title"], "font": _FONT}
+            elif "title" in caller and isinstance(caller["title"], dict):
+                caller["title"].setdefault("font", _FONT)
             base[ax_key] = {**_AX, **caller,
-                "tickfont":  caller.get("tickfont",  _AX["tickfont"]),
-                "title_font":caller.get("title_font",_AX["title_font"])}
+                "tickfont":   caller.get("tickfont",   _FONT),
+                "title_font": caller.get("title_font", _FONT)}
         else:
             base[ax_key] = {**_AX}
     return {**base, **kw}
@@ -2411,3 +2429,14 @@ try:
     st_autorefresh(interval=refresh*1000, key="lumi_v42_r")
 except ImportError:
     import time; time.sleep(refresh); st.rerun()
+
+
+
+
+
+
+
+
+
+
+
