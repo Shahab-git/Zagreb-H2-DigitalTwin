@@ -1467,84 +1467,229 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
 
 # ─── TAB 6: ANNUAL SIMULATION ──────────────────────────────────────────────
 with tabs[5]:
-    st.markdown('<p class="sec-hdr">365-day fast simulation · Zagreb climatology</p>',
-                unsafe_allow_html=True)
+    st.markdown(
+        '<p class="sec-hdr">365-day simulation · Zagreb climatology · real datasheet parameters</p>',
+        unsafe_allow_html=True)
+
     if st.button("▶ Run Annual Simulation", type="primary"):
         with st.spinner("Simulating 365 days…"):
             params = ScenarioParams(
                 name="Current Config", elec_priority_mode=sc_elec_mode,
                 h2_price_eur_kg=sc_h2_price, capex_eur=sc_capex, opex_annual_eur=sc_opex)
-            st.session_state.annual_report = \
-                st.session_state.scenario_eng.run_annual(params)
+            st.session_state.annual_report =                 st.session_state.scenario_eng.run_annual(params)
 
     rpt = st.session_state.annual_report
     if rpt:
-        k2 = st.columns(5)
-        kpi(k2[0],"Annual H₂",   f"{rpt.total_h2_kg:.1f} kg",
-            f"Avg {rpt.avg_daily_h2_kg*1000:.0f} g/day","kpi-cyan")
-        kpi(k2[1],"Avg LCOH",    f"€{rpt.avg_lcoh_eur_kg:.3f}/kg",
-            f"Best €{rpt.best_lcoh_eur_kg:.3f}","kpi-green")
-        kpi(k2[2],"Net Profit",  f"€{rpt.net_profit_eur:,.0f}",
-            f"Revenue €{rpt.total_revenue_eur:,.0f}",
-            "kpi-green" if rpt.net_profit_eur>0 else "kpi-red")
-        kpi(k2[3],"Payback",     f"{rpt.payback_years:.1f} yrs",
-            f"ROI {rpt.roi_pct:.1f}%",
-            "kpi-green" if rpt.payback_years<10 else "kpi-amber")
-        kpi(k2[4],"CO₂ Saved",   f"{rpt.total_co2_saved_ton:.2f} ton",
-            f"Credits €{rpt.co2_credits_eur:.0f}","kpi-green")
+        mdf = pd.DataFrame([{
+            "month": m.month_name, "h2": m.h2_produced_kg,
+            "solar": m.solar_kwh, "wind": m.wind_kwh,
+            "revenue": m.revenue_eur, "lcoh": m.lcoh_eur_kg,
+            "co2": m.co2_saved_kg, "elec_h": m.electrolyzer_hours,
+        } for m in rpt.monthly])
 
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown('<p class="sec-hdr">Monthly H₂ production</p>', unsafe_allow_html=True)
-            mdf = pd.DataFrame([{"month":m.month_name,"h2":m.h2_produced_kg,
-                "solar":m.solar_kwh,"wind":m.wind_kwh} for m in rpt.monthly])
+        # ── KPI strip ──────────────────────────────────────────────────────
+        k6 = st.columns(6)
+        kpi(k6[0], "Annual H₂",
+            f"{rpt.total_h2_kg:.1f} kg",
+            f"Avg {rpt.avg_daily_h2_kg*1000:.0f} g/day · Peak {rpt.peak_daily_h2_kg*1000:.0f} g",
+            "kpi-cyan")
+        kpi(k6[1], "Operating LCOH",
+            f"€{rpt.avg_lcoh_eur_kg:.2f}/kg",
+            f"Best €{rpt.best_lcoh_eur_kg:.2f} · Worst €{rpt.worst_lcoh_eur_kg:.2f}",
+            "kpi-green")
+        kpi(k6[2], "Net Profit",
+            f"€{rpt.net_profit_eur:,.0f}",
+            f"Revenue €{rpt.total_revenue_eur:,.0f}",
+            "kpi-green" if rpt.net_profit_eur > 0 else "kpi-red")
+        kpi(k6[3], "Payback / ROI",
+            f"{rpt.payback_years:.1f} yr",
+            f"ROI {rpt.roi_pct:.1f}%",
+            "kpi-green" if rpt.payback_years < 15 else "kpi-amber")
+        kpi(k6[4], "CO₂ Abatement",
+            f"{rpt.total_co2_saved_ton:.2f} ton",
+            f"Credits €{rpt.co2_credits_eur:.0f} · vs SMR",
+            "kpi-green")
+        kpi(k6[5], "Grid Independence",
+            f"{rpt.grid_independence_pct:.1f}%",
+            f"Elec. {rpt.electrolyzer_hours:.0f} h/yr",
+            "kpi-purple")
+
+        st.markdown("")
+
+        # ── Row 1: Monthly H₂ (improved) + Monthly generation mix (improved) ─
+        r1a, r1b = st.columns(2)
+        with r1a:
+            st.markdown('<p class="sec-hdr">Monthly H₂ production — Zagreb seasonal pattern</p>',
+                        unsafe_allow_html=True)
             f_m = go.Figure()
-            f_m.add_trace(go.Bar(x=mdf["month"],y=mdf["h2"],
-                marker_color=C["h2"],marker_line_width=0,name="H₂ kg"))
-            f_m.update_layout(**mk(height=220,yaxis_title="kg H₂"))
+            # Bar chart with gradient colour (blue in winter, gold in summer)
+            month_colors = [
+                "#3b82f6","#60a5fa","#34d399","#22c55e",
+                "#f59e0b","#f97316","#ef4444","#f97316",
+                "#f59e0b","#22c55e","#60a5fa","#3b82f6",
+            ]
+            f_m.add_trace(go.Bar(
+                x=mdf["month"], y=mdf["h2"],
+                marker_color=month_colors[:len(mdf)],
+                marker_line_width=0,
+                name="H₂ kg",
+                text=[f"{v:.1f}" for v in mdf["h2"]],
+                textposition="outside",
+                textfont=dict(color="#374151", size=10),
+                hovertemplate="%{x}: <b>%{y:.2f} kg H₂</b><extra></extra>"))
+            # Average line
+            avg_h2 = rpt.total_h2_kg / 12
+            f_m.add_hline(y=avg_h2, line_dash="dot", line_color="#94a3b8",
+                line_width=1.5,
+                annotation_text=f"Avg {avg_h2:.1f} kg",
+                annotation_font_size=10, annotation_font_color="#64748b")
+            # Best month marker
+            best_idx = mdf["h2"].idxmax()
+            f_m.add_annotation(
+                x=mdf.loc[best_idx,"month"], y=mdf.loc[best_idx,"h2"],
+                text="★ Best", showarrow=True, arrowhead=2,
+                font=dict(size=10, color="#f59e0b"),
+                arrowcolor="#f59e0b", ay=-30)
+            f_m.update_layout(**mk(height=280,
+                yaxis_title="kg H₂",
+                yaxis=dict(range=[0, mdf["h2"].max() * 1.25])))
             st.plotly_chart(f_m, use_container_width=True)
-        with c2:
-            st.markdown('<p class="sec-hdr">Monthly generation mix</p>', unsafe_allow_html=True)
+
+        with r1b:
+            st.markdown('<p class="sec-hdr">Monthly generation mix — solar vs wind</p>',
+                        unsafe_allow_html=True)
             f_g = go.Figure()
-            f_g.add_trace(go.Bar(x=mdf["month"],y=mdf["solar"],
-                name="Solar kWh",marker_color=C["solar"],marker_line_width=0))
-            f_g.add_trace(go.Bar(x=mdf["month"],y=mdf["wind"],
-                name="Wind kWh",marker_color=C["wind"],marker_line_width=0))
-            f_g.update_layout(**mk(height=220,barmode="stack",yaxis_title="kWh"))
+            f_g.add_trace(go.Bar(
+                x=mdf["month"], y=mdf["solar"],
+                name="Solar kWh", marker_color=C["solar"],
+                marker_line_width=0,
+                hovertemplate="%{x}: <b>%{y:.0f} kWh</b> solar<extra></extra>"))
+            f_g.add_trace(go.Bar(
+                x=mdf["month"], y=mdf["wind"],
+                name="Wind kWh", marker_color=C["wind"],
+                marker_line_width=0,
+                hovertemplate="%{x}: <b>%{y:.0f} kWh</b> wind<extra></extra>"))
+            # Total generation line
+            total_gen = mdf["solar"] + mdf["wind"]
+            f_g.add_trace(go.Scatter(
+                x=mdf["month"], y=total_gen,
+                name="Total", mode="lines+markers",
+                line=dict(color="#0f172a", width=2),
+                marker=dict(size=5, color="#0f172a"),
+                hovertemplate="%{x}: <b>%{y:.0f} kWh</b> total<extra></extra>"))
+            f_g.update_layout(**mk(height=280,
+                barmode="stack", yaxis_title="kWh",
+                legend=dict(orientation="h", y=1.1, font_size=11)))
             st.plotly_chart(f_g, use_container_width=True)
 
+        # ── Row 2: Monthly revenue trend + Monthly LCOH ────────────────────
+        r2a, r2b = st.columns(2)
+        with r2a:
+            st.markdown('<p class="sec-hdr">Monthly revenue — cumulative trend</p>',
+                        unsafe_allow_html=True)
+            f_rev = go.Figure()
+            f_rev.add_trace(go.Bar(
+                x=mdf["month"], y=mdf["revenue"],
+                name="Monthly revenue",
+                marker_color="rgba(34,197,94,.7)",
+                marker_line_width=0,
+                hovertemplate="%{x}: €<b>%{y:.2f}</b><extra></extra>"))
+            # Cumulative revenue line
+            cum_rev = mdf["revenue"].cumsum()
+            f_rev.add_trace(go.Scatter(
+                x=mdf["month"], y=cum_rev,
+                name="Cumulative", yaxis="y2",
+                line=dict(color="#0ea5e9", width=2),
+                hovertemplate="%{x}: €<b>%{y:.2f}</b> cumulative<extra></extra>"))
+            f_rev.update_layout(**mk(height=240,
+                yaxis=dict(title="Monthly €", color="#22c55e"),
+                yaxis2=dict(title="Cumulative €", overlaying="y", side="right",
+                            color="#0ea5e9"),
+                legend=dict(orientation="h", y=1.1, font_size=10)))
+            st.plotly_chart(f_rev, use_container_width=True)
+
+        with r2b:
+            st.markdown('<p class="sec-hdr">Monthly operating LCOH — seasonal variation</p>',
+                        unsafe_allow_html=True)
+            f_lcoh = go.Figure()
+            lcoh_colors = ["#22c55e" if v <= rpt.avg_lcoh_eur_kg else "#f59e0b"
+                           for v in mdf["lcoh"]]
+            f_lcoh.add_trace(go.Bar(
+                x=mdf["month"], y=mdf["lcoh"],
+                marker_color=lcoh_colors,
+                marker_line_width=0, name="LCOH €/kg",
+                hovertemplate="%{x}: €<b>%{y:.3f}</b>/kg<extra></extra>"))
+            f_lcoh.add_hline(
+                y=rpt.avg_lcoh_eur_kg, line_dash="dot", line_color="#64748b",
+                line_width=1.5,
+                annotation_text=f"Avg €{rpt.avg_lcoh_eur_kg:.2f}/kg",
+                annotation_font_size=10, annotation_font_color="#64748b")
+            f_lcoh.update_layout(**mk(height=240,
+                yaxis_title="€/kg",
+                yaxis=dict(range=[0, mdf["lcoh"].max() * 1.3])))
+            st.plotly_chart(f_lcoh, use_container_width=True)
+
+        # ── Row 3: Scenario comparison (improved table) ────────────────────
         st.markdown('<p class="sec-hdr">Scenario comparison</p>', unsafe_allow_html=True)
         with st.spinner("Running 3 scenarios…"):
             scenarios = [
-                ScenarioParams("Default (h2_max)",elec_priority_mode="h2_max",
-                    h2_price_eur_kg=sc_h2_price,capex_eur=sc_capex,opex_annual_eur=sc_opex),
-                ScenarioParams("LCOH optimised",elec_priority_mode="lcoh_opt",
-                    h2_price_eur_kg=sc_h2_price,capex_eur=sc_capex,opex_annual_eur=sc_opex),
-                ScenarioParams("PV ×2 scale",pv_scale=2.0,elec_priority_mode="h2_max",
-                    h2_price_eur_kg=sc_h2_price,capex_eur=sc_capex,opex_annual_eur=sc_opex),
+                ScenarioParams("H₂ Max", elec_priority_mode="h2_max",
+                    h2_price_eur_kg=sc_h2_price, capex_eur=sc_capex, opex_annual_eur=sc_opex),
+                ScenarioParams("LCOH Optimised", elec_priority_mode="lcoh_opt",
+                    h2_price_eur_kg=sc_h2_price, capex_eur=sc_capex, opex_annual_eur=sc_opex),
+                ScenarioParams("PV ×2 Scale", pv_scale=2.0, elec_priority_mode="h2_max",
+                    h2_price_eur_kg=sc_h2_price, capex_eur=sc_capex, opex_annual_eur=sc_opex),
             ]
             sc_reports = st.session_state.scenario_eng.compare_scenarios(scenarios)
+
+        # Visual scenario comparison bars
+        sc_fig = go.Figure()
+        sc_names  = [sc.name for sc in scenarios]
+        sc_h2     = [r.total_h2_kg for r in sc_reports]
+        sc_profit = [r.net_profit_eur for r in sc_reports]
+        sc_lcoh   = [r.avg_lcoh_eur_kg for r in sc_reports]
+        sc_fig.add_trace(go.Bar(name="H₂ (kg/yr)", x=sc_names, y=sc_h2,
+            marker_color=C["h2"], marker_line_width=0,
+            text=[f"{v:.0f} kg" for v in sc_h2],
+            textposition="outside", textfont=dict(color="#374151", size=11)))
+        sc_fig.update_layout(**mk(height=220,
+            yaxis_title="kg H₂/year",
+            legend=dict(orientation="h", y=1.1)))
+        st.plotly_chart(sc_fig, use_container_width=True)
+
+        # Scenario data table
         sc_df = pd.DataFrame([{
-            "Scenario":sc.name,"H₂ (kg/yr)":f"{r.total_h2_kg:.1f}",
-            "LCOH (€/kg)":f"{r.avg_lcoh_eur_kg:.3f}",
-            "Revenue (€)":f"{r.total_revenue_eur:,.0f}",
-            "Net Profit":f"€{r.net_profit_eur:,.0f}",
-            "Payback":f"{r.payback_years:.1f} yr",
-            "CO₂ (ton)":f"{r.total_co2_saved_ton:.2f}",
-        } for sc,r in zip(scenarios,sc_reports)])
+            "Scenario":     sc.name,
+            "H₂ (kg/yr)":  f"{r.total_h2_kg:.1f}",
+            "Op. LCOH":     f"€{r.avg_lcoh_eur_kg:.3f}/kg",
+            "Revenue":      f"€{r.total_revenue_eur:,.0f}",
+            "Net P&L":      f"€{r.net_profit_eur:,.0f}",
+            "Payback":      f"{r.payback_years:.1f} yr",
+            "CO₂ (ton)":    f"{r.total_co2_saved_ton:.2f}",
+            "Grid indep.":  f"{r.grid_independence_pct:.1f}%",
+        } for sc, r in zip(scenarios, sc_reports)])
         st.dataframe(sc_df, use_container_width=True, hide_index=True)
 
-        st.markdown('<p class="sec-hdr">Annual resource summary</p>', unsafe_allow_html=True)
-        rc = st.columns(4)
-        rc[0].metric("Solar generation",    f"{rpt.total_solar_kwh:,.0f} kWh")
-        rc[1].metric("Wind generation",     f"{rpt.total_wind_kwh:,.0f} kWh")
-        rc[2].metric("Water consumed",      f"{rpt.total_water_l:,.0f} L")
-        rc[3].metric("O₂ produced",         f"{rpt.total_o2_nm3:,.0f} Nm³")
-        rc2 = st.columns(4)
-        rc2[0].metric("Electrolyzer hours", f"{rpt.electrolyzer_hours:,.0f} h")
-        rc2[1].metric("Stack replacements", str(rpt.stack_replacements))
-        rc2[2].metric("Grid independence",  f"{rpt.grid_independence_pct:.1f}%")
-        rc2[3].metric("BESS life remaining",f"{rpt.bess_remaining_life_pct:.1f}%")
+        # ── Row 4: Annual resource summary (styled cards) ──────────────────
+        st.markdown('<p class="sec-hdr">Annual resource & system summary</p>',
+                    unsafe_allow_html=True)
+        res_html = f"""<!DOCTYPE html><html><body style="margin:0;padding:6px;
+font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+  {"".join(f'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;text-align:center"><div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.06em">{lbl}</div><div style="font-size:20px;font-weight:700;color:#111827;margin:4px 0">{val}</div><div style="font-size:10px;color:#94a3b8">{sub}</div></div>' for lbl,val,sub in [
+    ("Solar Generation",  f"{rpt.total_solar_kwh:,.0f} kWh", "photovoltaic array"),
+    ("Wind Generation",   f"{rpt.total_wind_kwh:,.0f} kWh", "10 kW HAWT"),
+    ("Water Consumed",    f"{rpt.total_water_l:,.0f} L",     "DIN ISO 3696 Type 1"),
+    ("O₂ Produced",       f"{rpt.total_o2_nm3:,.0f} Nm³",   "electrolysis by-product"),
+    ("Electrolyzer Hours",f"{rpt.electrolyzer_hours:,.0f} h","S30/30 operating hours"),
+    ("Stack Replacements",str(rpt.stack_replacements),        f"of {Config.electrolyzer.mttf_hours:,}h MTTF"),
+    ("BESS Life Left",    f"{rpt.bess_remaining_life_pct:.1f}%", f"of {Config.BATT_CYCLE_LIFE:,} cycles"),
+    ("H₂ to HRS",         f"{rpt.total_h2_to_hrs_kg:.1f} kg","dispensed to vehicles"),
+  ])}
+</div>
+</body></html>"""
+        components.html(res_html, height=165, scrolling=False)
+
     else:
         st.info("Click **▶ Run Annual Simulation** to generate the 365-day report.")
 
