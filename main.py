@@ -385,6 +385,7 @@ tabs = st.tabs([
     "💡 Optimizer",
     "📊 Uncertainty",
     "🛡 Safety",
+    "📐 EMS Strategy",
 ])
 
 # ─── TAB 1: ACQUISITION ────────────────────────────────────────────────────
@@ -1208,20 +1209,27 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
                     max(.001, s.heat_kw),
                     max(.001, s.fc_kw)],
             labels=["EV Charging", "Grid Export", "Heat Recovery", "Fuel Cell"],
-            hole=0.58,
+            hole=0.55,
             marker=dict(
                 colors=[C["ev"], C["grid"], C["solar"], C["bess"]],
                 line=dict(color="#ffffff", width=2)),
+            # Always show labels outside so they are never hidden
+            textposition="outside",
             textinfo="label+percent",
-            textfont=dict(color="#111827", size=11),
-            hovertemplate="%{label}: %{value:.3f} kW<extra></extra>"))
+            textfont=dict(color="#111827", size=12, family="'Segoe UI',sans-serif"),
+            # Pull each slice slightly so outside labels have space
+            pull=[0.04, 0.04, 0.04, 0.04],
+            # Show all labels regardless of slice size
+            automargin=True,
+            direction="clockwise",
+            hovertemplate="<b>%{label}</b><br>%{value:.3f} kW<br>%{percent}<extra></extra>"))
         f16.add_annotation(
             text=f"<b>{s.fc_kw + s.ev_kw + s.grid_export_kw + s.heat_kw:.2f}</b><br>kW total",
-            showarrow=False, font=dict(size=12, color="#111827"),
+            showarrow=False, font=dict(size=13, color="#111827"),
             x=0.5, y=0.5, xref="paper", yref="paper")
-        f16.update_layout(**mk(height=210,
-            legend=dict(orientation="h", y=-0.12, font_size=10),
-            margin=dict(t=10, b=40, l=10, r=10)))
+        f16.update_layout(**mk(height=270,
+            showlegend=False,
+            margin=dict(t=30, b=30, l=80, r=80)))
         st.plotly_chart(f16, use_container_width=True)
 
 # ─── TAB 5: SUBSYSTEMS ─────────────────────────────────────────────────────
@@ -2420,6 +2428,252 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
             pf.update_layout(**mk(height=180, yaxis_title="bar",
                 margin=dict(t=20,b=30,l=44,r=16)))
             st.plotly_chart(pf, use_container_width=True)
+
+# ─── TAB 10: EMS FLOWCHART ─────────────────────────────────────────────────
+with tabs[9]:
+    st.markdown(
+        '<p class="sec-hdr">Energy management strategy — decision flowchart</p>',
+        unsafe_allow_html=True)
+    st.markdown(
+        "The EMS evaluates five inputs every tick and dispatches power through "
+        "a priority-ordered decision tree. Electrolyzer runs first (highest revenue), "
+        "BESS charges from surplus, grid export is last resort.",
+        unsafe_allow_html=False)
+
+    ems_html = """<!DOCTYPE html>
+<html><head>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+body{background:transparent;padding:16px}
+svg{width:100%;height:auto;display:block}
+</style>
+</head><body>
+<svg viewBox="0 0 780 1380" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>LUMINIH2 Energy Management Strategy Flowchart</title>
+<desc>Decision flowchart showing how PV power, wind power, load demand, battery SOC and hydrogen storage level feed into the EMS logic to produce outputs including battery charging, electrolyzer activation, fuel cell dispatch, grid interaction and emergency protection.</desc>
+
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<!-- ─── INPUTS ROW ─── -->
+<!-- Input box style: light blue fill #e0f2fe, border #0ea5e9, text #0c4a6e -->
+
+<!-- PV Power -->
+<rect x="20"  y="20" width="120" height="50" rx="8" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="1.5"/>
+<text x="80"  y="41" text-anchor="middle" font-size="12" font-weight="600" fill="#0c4a6e">☀ PV power</text>
+<text x="80"  y="58" text-anchor="middle" font-size="11" fill="#0369a1">0 – 15 kW</text>
+
+<!-- Wind Power -->
+<rect x="160" y="20" width="120" height="50" rx="8" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="1.5"/>
+<text x="220" y="41" text-anchor="middle" font-size="12" font-weight="600" fill="#0c4a6e">💨 Wind power</text>
+<text x="220" y="58" text-anchor="middle" font-size="11" fill="#0369a1">0 – 10 kW</text>
+
+<!-- Load Demand -->
+<rect x="300" y="20" width="120" height="50" rx="8" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="1.5"/>
+<text x="360" y="41" text-anchor="middle" font-size="12" font-weight="600" fill="#0c4a6e">⚡ Load demand</text>
+<text x="360" y="58" text-anchor="middle" font-size="11" fill="#0369a1">EV + base load</text>
+
+<!-- Battery SOC -->
+<rect x="440" y="20" width="120" height="50" rx="8" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="1.5"/>
+<text x="500" y="41" text-anchor="middle" font-size="12" font-weight="600" fill="#0c4a6e">🔋 Battery SOC</text>
+<text x="500" y="58" text-anchor="middle" font-size="11" fill="#0369a1">10 – 90 %</text>
+
+<!-- H2 Storage -->
+<rect x="580" y="20" width="150" height="50" rx="8" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="1.5"/>
+<text x="655" y="41" text-anchor="middle" font-size="12" font-weight="600" fill="#0c4a6e">⚗ H₂ storage</text>
+<text x="655" y="58" text-anchor="middle" font-size="11" fill="#0369a1">Buffer + main tank</text>
+
+<!-- Arrows from inputs into EMS box -->
+<line x1="80"  y1="70" x2="370" y2="118" stroke="#0ea5e9" stroke-width="1.2" fill="none" marker-end="url(#arr)"/>
+<line x1="220" y1="70" x2="375" y2="118" stroke="#0ea5e9" stroke-width="1.2" fill="none" marker-end="url(#arr)"/>
+<line x1="360" y1="70" x2="380" y2="118" stroke="#0ea5e9" stroke-width="1.2" fill="none" marker-end="url(#arr)"/>
+<line x1="500" y1="70" x2="385" y2="118" stroke="#0ea5e9" stroke-width="1.2" fill="none" marker-end="url(#arr)"/>
+<line x1="655" y1="70" x2="390" y2="118" stroke="#0ea5e9" stroke-width="1.2" fill="none" marker-end="url(#arr)"/>
+
+<!-- ─── EMS BRAIN ─── -->
+<rect x="240" y="118" width="280" height="54" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+<text x="380" y="140" text-anchor="middle" font-size="14" font-weight="700" fill="#f1f5f9">EMS Brain</text>
+<text x="380" y="158" text-anchor="middle" font-size="11" fill="#94a3b8">ems_brain.py · runs every 10 s</text>
+
+<!-- Arrow down to D1 -->
+<line x1="380" y1="172" x2="380" y2="210" stroke="#475569" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+<!-- ─── DECISION 1: Surplus renewable? ─── -->
+<!-- Diamond shape -->
+<polygon points="380,210 500,250 380,290 260,250" fill="#fef9c3" stroke="#d97706" stroke-width="1.5"/>
+<text x="380" y="245" text-anchor="middle" font-size="12" font-weight="600" fill="#78350f">Surplus renewable</text>
+<text x="380" y="261" text-anchor="middle" font-size="12" font-weight="600" fill="#78350f">energy?</text>
+<text x="380" y="277" text-anchor="middle" font-size="10" fill="#92400e">gen > load demand</text>
+
+<!-- NO → left → Low renewable path -->
+<line x1="260" y1="250" x2="120" y2="250" stroke="#ef4444" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<text x="190" y="243" text-anchor="middle" font-size="11" font-weight="600" fill="#b91c1c">NO</text>
+
+<!-- YES → down -->
+<line x1="380" y1="290" x2="380" y2="330" stroke="#22c55e" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<text x="394" y="315" font-size="11" font-weight="600" fill="#15803d">YES</text>
+
+<!-- ─── DECISION 2: Battery charged? ─── -->
+<polygon points="380,330 500,370 380,410 260,370" fill="#fef9c3" stroke="#d97706" stroke-width="1.5"/>
+<text x="380" y="365" text-anchor="middle" font-size="12" font-weight="600" fill="#78350f">Battery charged?</text>
+<text x="380" y="381" text-anchor="middle" font-size="10" fill="#92400e">SOC ≥ 85 %</text>
+
+<!-- NO → left → Charge BESS output -->
+<line x1="260" y1="370" x2="180" y2="370" stroke="#ef4444" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<text x="220" y="363" text-anchor="middle" font-size="11" font-weight="600" fill="#b91c1c">NO</text>
+
+<!-- YES → down -->
+<line x1="380" y1="410" x2="380" y2="450" stroke="#22c55e" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<text x="394" y="435" font-size="11" font-weight="600" fill="#15803d">YES</text>
+
+<!-- Charge BESS output box -->
+<rect x="30" y="345" width="150" height="50" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+<text x="105" y="366" text-anchor="middle" font-size="12" font-weight="600" fill="#14532d">Charge BESS</text>
+<text x="105" y="382" text-anchor="middle" font-size="11" fill="#166534">25 kW max (0.25C)</text>
+
+<!-- ─── DECISION 3: Electrolyzer ready? ─── -->
+<polygon points="380,450 500,490 380,530 260,490" fill="#fef9c3" stroke="#d97706" stroke-width="1.5"/>
+<text x="380" y="485" text-anchor="middle" font-size="12" font-weight="600" fill="#78350f">Electrolyzer</text>
+<text x="380" y="501" text-anchor="middle" font-size="12" font-weight="600" fill="#78350f">available?</text>
+<text x="380" y="517" text-anchor="middle" font-size="10" fill="#92400e">surplus ≥ 0.74 kW</text>
+
+<!-- NO → right → surplus to grid -->
+<line x1="500" y1="490" x2="590" y2="490" stroke="#ef4444" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<text x="545" y="483" text-anchor="middle" font-size="11" font-weight="600" fill="#b91c1c">NO</text>
+
+<!-- YES → down -->
+<line x1="380" y1="530" x2="380" y2="570" stroke="#22c55e" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<text x="394" y="555" font-size="11" font-weight="600" fill="#15803d">YES</text>
+
+<!-- ─── OUTPUT: Activate Electrolyzer ─── -->
+<rect x="255" y="570" width="250" height="64" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="380" y="593" text-anchor="middle" font-size="13" font-weight="700" fill="#3b0764">⚗ Activate electrolyzer</text>
+<text x="380" y="610" text-anchor="middle" font-size="11" fill="#5b21b6">Nominal 3 kW → Peak 5.63 kW</text>
+<text x="380" y="626" text-anchor="middle" font-size="10" fill="#6d28d9">30-min min. runtime guard</text>
+
+<!-- Arrow down from electrolyzer -->
+<line x1="380" y1="634" x2="380" y2="670" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+<!-- ─── DECISION 4: H2 storage available? ─── -->
+<polygon points="380,670 500,710 380,750 260,710" fill="#fef9c3" stroke="#d97706" stroke-width="1.5"/>
+<text x="380" y="705" text-anchor="middle" font-size="12" font-weight="600" fill="#78350f">H₂ storage</text>
+<text x="380" y="721" text-anchor="middle" font-size="12" font-weight="600" fill="#78350f">available?</text>
+<text x="380" y="737" text-anchor="middle" font-size="10" fill="#92400e">main tank &gt; 10 %</text>
+
+<!-- NO → right -->
+<line x1="500" y1="710" x2="590" y2="710" stroke="#ef4444" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<text x="545" y="703" text-anchor="middle" font-size="11" font-weight="600" fill="#b91c1c">NO</text>
+
+<!-- YES → down -->
+<line x1="380" y1="750" x2="380" y2="790" stroke="#22c55e" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<text x="394" y="775" font-size="11" font-weight="600" fill="#15803d">YES</text>
+
+<!-- ─── OUTPUT: Dispatch to HRS ─── -->
+<rect x="255" y="790" width="250" height="52" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+<text x="380" y="812" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">⛽ Dispatch H₂ to HRS</text>
+<text x="380" y="830" text-anchor="middle" font-size="11" fill="#166534">Compressor + TH540-50 → HRS</text>
+
+<!-- Arrow down -->
+<line x1="380" y1="842" x2="380" y2="880" stroke="#22c55e" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+<!-- ─── DECISION 5: Grid export surplus? ─── -->
+<polygon points="380,880 500,920 380,960 260,920" fill="#fef9c3" stroke="#d97706" stroke-width="1.5"/>
+<text x="380" y="915" text-anchor="middle" font-size="12" font-weight="600" fill="#78350f">Remaining</text>
+<text x="380" y="931" text-anchor="middle" font-size="12" font-weight="600" fill="#78350f">surplus &gt; 0.5 kW?</text>
+
+<!-- YES → right → Grid export -->
+<line x1="500" y1="920" x2="590" y2="920" stroke="#22c55e" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<text x="545" y="913" text-anchor="middle" font-size="11" font-weight="600" fill="#15803d">YES</text>
+
+<!-- NO → down → Supply load only -->
+<line x1="380" y1="960" x2="380" y2="1000" stroke="#ef4444" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<text x="394" y="985" font-size="11" font-weight="600" fill="#b91c1c">NO</text>
+
+<!-- ─── OUTPUT: Supply load ─── -->
+<rect x="255" y="1000" width="250" height="52" rx="8" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="1.5"/>
+<text x="380" y="1022" text-anchor="middle" font-size="13" font-weight="700" fill="#0c4a6e">⚡ Supply load</text>
+<text x="380" y="1040" text-anchor="middle" font-size="11" fill="#0369a1">FC → EV charger → base load</text>
+
+<!-- Arrow down to final -->
+<line x1="380" y1="1052" x2="380" y2="1090" stroke="#0ea5e9" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+<!-- ─── EMERGENCY / PROTECTION ─── -->
+<rect x="235" y="1090" width="290" height="64" rx="10" fill="#fee2e2" stroke="#ef4444" stroke-width="2"/>
+<text x="380" y="1113" text-anchor="middle" font-size="13" font-weight="700" fill="#7f1d1d">🔒 Emergency / protection</text>
+<text x="380" y="1130" text-anchor="middle" font-size="11" fill="#991b1b">SOC &lt; 15 % → grid import</text>
+<text x="380" y="1146" text-anchor="middle" font-size="11" fill="#991b1b">T &gt; 70°C or leak → shutdown</text>
+
+<!-- ─── RIGHT BRANCH: Low renewable ─── -->
+<!-- Low renewable box -->
+<rect x="30" y="220" width="150" height="52" rx="8" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+<text x="105" y="241" text-anchor="middle" font-size="12" font-weight="600" fill="#7f1d1d">Low renewable</text>
+<text x="105" y="257" text-anchor="middle" font-size="11" fill="#991b1b">condition</text>
+<text x="105" y="273" text-anchor="middle" font-size="10" fill="#b91c1c">gen &lt; load demand</text>
+
+<!-- Arrow from Low renewable down to FC decision -->
+<line x1="105" y1="272" x2="105" y2="870" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5 4" fill="none"/>
+<line x1="105" y1="870" x2="255" y2="920" stroke="#ef4444" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<text x="60" y="580" font-size="11" fill="#b91c1c" text-anchor="middle">check</text>
+<text x="60" y="594" font-size="11" fill="#b91c1c" text-anchor="middle">FC avail.</text>
+
+<!-- Activate FC output (right of D4) -->
+<rect x="590" y="685" width="165" height="52" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+<text x="672" y="707" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">⚡ Activate fuel cell</text>
+<text x="672" y="723" text-anchor="middle" font-size="11" fill="#166534">AIRCELL 3000 · 3 kW</text>
+
+<!-- Grid export output (right of D5) -->
+<rect x="590" y="895" width="165" height="52" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="672" y="917" text-anchor="middle" font-size="12" font-weight="700" fill="#1e293b">🌐 Grid export</text>
+<text x="672" y="933" text-anchor="middle" font-size="11" fill="#475569">€0.12/kWh · Croatia</text>
+
+<!-- Grid surplus no output (right of D3) -->
+<rect x="590" y="465" width="165" height="52" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="672" y="487" text-anchor="middle" font-size="12" font-weight="700" fill="#1e293b">🌐 Export surplus</text>
+<text x="672" y="503" text-anchor="middle" font-size="11" fill="#475569">no electrolyzer capacity</text>
+
+<!-- ─── LEGEND ─── -->
+<rect x="20" y="1180" width="730" height="170" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+<text x="385" y="1202" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">Legend</text>
+
+<!-- Input -->
+<rect x="40"  y="1215" width="90" height="30" rx="6" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="1.5"/>
+<text x="85"  y="1234" text-anchor="middle" font-size="11" font-weight="600" fill="#0c4a6e">Input</text>
+
+<!-- Decision -->
+<polygon points="200,1215 250,1230 200,1245 150,1230" fill="#fef9c3" stroke="#d97706" stroke-width="1.5"/>
+<text x="200" y="1234" text-anchor="middle" font-size="11" font-weight="600" fill="#78350f">Decision</text>
+
+<!-- Output green -->
+<rect x="270" y="1215" width="110" height="30" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+<text x="325" y="1234" text-anchor="middle" font-size="11" font-weight="600" fill="#14532d">Output (active)</text>
+
+<!-- Output purple -->
+<rect x="395" y="1215" width="130" height="30" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="460" y="1234" text-anchor="middle" font-size="11" font-weight="600" fill="#3b0764">Electrolyzer action</text>
+
+<!-- Emergency -->
+<rect x="540" y="1215" width="120" height="30" rx="6" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+<text x="600" y="1234" text-anchor="middle" font-size="11" font-weight="600" fill="#7f1d1d">Emergency / fault</text>
+
+<!-- Arrow labels -->
+<line x1="40"  y1="1280" x2="100" y2="1280" stroke="#22c55e" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+<text x="115" y="1284" font-size="11" fill="#15803d" font-weight="600">YES / surplus</text>
+<line x1="250" y1="1280" x2="310" y2="1280" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+<text x="325" y="1284" font-size="11" fill="#b91c1c" font-weight="600">NO / deficit</text>
+<line x1="440" y1="1280" x2="500" y2="1280" stroke="#475569" stroke-width="1.5" stroke-dasharray="5 4" fill="none" marker-end="url(#arr)"/>
+<text x="515" y="1284" font-size="11" fill="#475569">Fallback path</text>
+
+<!-- Priority note -->
+<text x="385" y="1318" text-anchor="middle" font-size="11" fill="#64748b">EMS priority order: 1 Electrolyzer nominal · 2 BESS charge · 3 Electrolyzer overload · 4 EV · 5 Grid export · 6 Emergency import</text>
+<text x="385" y="1336" text-anchor="middle" font-size="11" fill="#64748b">Minimum electrolyzer run-time: 30 minutes · Timestep: 10 seconds · BESS emergency floor: SOC 15 %</text>
+
+</svg>
+</body></html>"""
+
+    components.html(ems_html, height=1420, scrolling=True)
 
 # =============================================================================
 # AUTO-REFRESH
