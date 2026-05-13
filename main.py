@@ -113,7 +113,21 @@ PLOT = dict(
     font_color="#111827",
     font=dict(color="#111827", size=12,
               family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"),
-    margin=dict(t=28, b=28, l=44, r=16),
+    margin=dict(t=32, b=56, l=52, r=20),
+    legend=dict(
+        orientation="h",
+        y=-0.22,
+        x=0.5,
+        xanchor="center",
+        yanchor="top",
+        font=dict(size=13, color="#111827"),
+        bgcolor="rgba(255,255,255,0.95)",
+        bordercolor="#e2e8f0",
+        borderwidth=1,
+        itemsizing="constant",
+        itemwidth=40,
+        traceorder="normal",
+    ),
 )
 
 _AX = dict(
@@ -399,12 +413,12 @@ with tabs[0]:
             values=[max(.01,s.solar_kw), max(.01,s.wind_kw), max(.01,s.grid_import_kw)],
             labels=["Solar PV","Wind","Grid Import"], hole=0.65,
             marker=dict(colors=[C["solar"],C["wind"],C["grid"]],
-                        line=dict(color="#FFFFFF",width=2))))
+                        line=dict(color="#ffffff",width=2))))
         fig.add_annotation(text=f"<b>{s.total_gen_kw:.1f}</b><br>kW",
                            showarrow=False, font=dict(size=14,color="#111827"),
                            x=0.5, y=0.5, xref="paper", yref="paper")
         fig.update_layout(**mk(height=220, showlegend=True,
-                               legend=dict(orientation="h",y=-0.1,font_size=11)))
+                               legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
         st.plotly_chart(fig, use_container_width=True)
 
         st.markdown('<p class="sec-hdr">Irradiance trend — live</p>', unsafe_allow_html=True)
@@ -598,7 +612,7 @@ with tabs[1]:
                 line=dict(color=C["solar"], width=2, dash="dot"),
                 hovertemplate="%{y:.2f} kW<extra>Total gen</extra>"))
         f5.update_layout(**mk(height=260, yaxis_title="kW",
-            legend=dict(orientation="h", y=1.12, x=0, font_size=11)))
+            legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
         st.plotly_chart(f5, use_container_width=True)
 
     # ── 3. H₂ trend + cumulative | Efficiency scatter + quality ───────────
@@ -678,7 +692,7 @@ with tabs[1]:
                 yaxis_title="Efficiency η (%)",
                 xaxis=dict(range=[0, Config.ELEC_P_MAX_KW + 0.3]),
                 yaxis=dict(range=[50, 95]),
-                legend=dict(orientation="h", y=1.1, font_size=10)))
+                legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
             st.plotly_chart(f8, use_container_width=True)
 
         st.markdown('<p class="sec-hdr">Process quality</p>', unsafe_allow_html=True)
@@ -936,7 +950,7 @@ with tabs[2]:
                         hovertemplate=f"%{{y:.1f}}%<extra>{label}</extra>"))
             f11.update_layout(**mk(height=230,
                 yaxis_title="%", yaxis=dict(range=[0,108]),
-                legend=dict(orientation="h", y=1.1, font_size=10)))
+                legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
             st.plotly_chart(f11, use_container_width=True)
 
         # Pressure gauge
@@ -1133,7 +1147,7 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
                             color=C["h2"],
                             range=[0, Config.FC_H2_CONSUMPTION_KG_KWH*1000
                                    * Config.FC_POWER_NOM_KW * 1.2]),
-                legend=dict(orientation="h", y=1.1, font_size=10)))
+                legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
             st.plotly_chart(f14, use_container_width=True)
 
         # HRS dispensing tracker
@@ -1198,7 +1212,7 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
                 bgcolor="rgba(255,255,255,0.85)",
                 bordercolor="#e2e8f0", borderwidth=1)
             f15.update_layout(**mk(height=220, yaxis_title="kW",
-                legend=dict(orientation="h", y=1.1, font_size=10)))
+                legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
             st.plotly_chart(f15, use_container_width=True)
 
         # Downstream split donut
@@ -1631,7 +1645,7 @@ with tabs[5]:
                 hovertemplate="%{x}: <b>%{y:.0f} kWh</b> total<extra></extra>"))
             f_g.update_layout(**mk(height=280,
                 barmode="stack", yaxis_title="kWh",
-                legend=dict(orientation="h", y=1.1, font_size=11)))
+                legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
             st.plotly_chart(f_g, use_container_width=True)
 
         # ── Row 2: Monthly revenue trend + Monthly LCOH ────────────────────
@@ -1657,7 +1671,7 @@ with tabs[5]:
                 yaxis=dict(title="Monthly €", color="#22c55e"),
                 yaxis2=dict(title="Cumulative €", overlaying="y", side="right",
                             color="#0ea5e9"),
-                legend=dict(orientation="h", y=1.1, font_size=10)))
+                legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
             st.plotly_chart(f_rev, use_container_width=True)
 
         with r2b:
@@ -1706,7 +1720,7 @@ with tabs[5]:
             textposition="outside", textfont=dict(color="#374151", size=11)))
         sc_fig.update_layout(**mk(height=220,
             yaxis_title="kg H₂/year",
-            legend=dict(orientation="h", y=1.1)))
+            legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
         st.plotly_chart(sc_fig, use_container_width=True)
 
         # Scenario data table
@@ -1910,7 +1924,7 @@ with tabs[6]:
                         side="right", color=C["h2"]),
             yaxis3=dict(overlaying="y", side="right",
                         showgrid=False, showticklabels=False),
-            legend=dict(orientation="h", y=1.12, x=0, font_size=11)))
+            legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
         st.plotly_chart(oc_fig, use_container_width=True)
 
         # ── Row 2: H₂ vs profit scatter + sensitivity heatmap ─────────────
@@ -1961,7 +1975,7 @@ with tabs[6]:
             sc7.update_layout(**mk(height=310,
                 xaxis_title="Annual H₂ production (kg/yr)",
                 yaxis_title="Net annual profit (€)",
-                legend=dict(orientation="h", y=1.1, font_size=10)))
+                legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
             st.plotly_chart(sc7, use_container_width=True)
 
         with r7b:
@@ -2198,7 +2212,7 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
             yaxis=dict(title="H₂ production (ton/yr)", color="#8b5cf6"),
             yaxis2=dict(title="Revenue (€/yr)", overlaying="y",
                         side="right", color=C["bess"]),
-            legend=dict(orientation="h", y=1.1, font_size=11),
+            legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1),
             xaxis=dict(tickangle=-15)))
         st.plotly_chart(sc_fig, use_container_width=True)
 
