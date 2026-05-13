@@ -2112,11 +2112,60 @@ with tabs[6]:
 with tabs[7]:
     st.markdown('<p class="sec-hdr">Monte Carlo probabilistic analysis · Zagreb climatology · 80% confidence intervals</p>',
                 unsafe_allow_html=True)
-    uc1, uc2 = st.columns([1,2])
+    # ── Controls CSS — larger labels same style as Tab 7 ──────────────────
+    st.markdown("""
+<style>
+[data-testid="stSlider"] label p,
+[data-testid="stNumberInput"] label p,
+[data-testid="stSelectSlider"] label p {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+}
+[data-testid="stSlider"] [data-testid="stTickBarMin"],
+[data-testid="stSlider"] [data-testid="stTickBarMax"],
+[data-testid="stSelectSlider"] [data-testid="stTickBarMin"],
+[data-testid="stSelectSlider"] [data-testid="stTickBarMax"] {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+}
+[data-testid="stNumberInput"] input {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+    uc1, uc2 = st.columns([1, 2])
     with uc1:
-        unc_h2_price = st.slider("H₂ sell price (€/kg)",3.0,12.0,6.0,0.5,key="unc_h2")
-        unc_opex     = st.number_input("Annual OPEX (€)",value=8000,step=500,key="unc_opex")
-        unc_n        = st.select_slider("Simulations",[100,200,500,1000],value=500,key="unc_n")
+        unc_h2_price = st.slider(
+            "H₂ sell price (€/kg)", 3.0, 12.0, 6.0, 0.5, key="unc_h2")
+        st.markdown(
+            f'<div style="font-size:13px;font-weight:600;color:#0ea5e9;'
+            f'margin-top:-8px">Selected: <b>€{unc_h2_price:.1f}/kg</b></div>',
+            unsafe_allow_html=True)
+
+        unc_opex = st.number_input(
+            "Annual OPEX (€)",
+            min_value=0, max_value=100_000,
+            value=8_000, step=500, key="unc_opex")
+        st.markdown(
+            f'<div style="font-size:13px;font-weight:600;color:#374151;'
+            f'margin-top:-4px">'
+            f'O&M + maintenance · typical range €5,000–15,000/yr</div>',
+            unsafe_allow_html=True)
+
+        unc_n = st.select_slider(
+            "Simulations", [100, 200, 500, 1000], value=500, key="unc_n")
+        st.markdown(
+            f'<div style="font-size:13px;font-weight:600;color:#374151;'
+            f'margin-top:-8px">'
+            f'{"Fast ~1s" if unc_n<=100 else "Balanced ~3s" if unc_n<=500 else "Precise ~8s"}'
+            f' · {unc_n} Monte Carlo runs</div>',
+            unsafe_allow_html=True)
+
     with uc2:
         st.markdown(
             '<div class="alert-info">ℹ️ <b>What this shows:</b> '
