@@ -355,6 +355,133 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# ── Voice system ──────────────────────────────────────────────────────────
+_new_alerts = []
+if st.session_state.get("voice_enabled", True):
+    for _a in list(alrt.errors()) + list(alrt.warnings()):
+        _key = getattr(_a, "code","") + "_" + getattr(_a, "ts","")
+        if _key not in st.session_state.get("voice_alert_spoken", set()):
+            st.session_state.voice_alert_spoken.add(_key)
+            _new_alerts.append(
+                ("Critical alert: " if _a.level == "error" else "Warning: ")
+                + _a.message)
+
+_n_total   = len(list(alrt.active)) if alrt.active else 0
+_n_err     = len(list(alrt.errors()))
+_alert_js  = str(_new_alerts).replace("'", '"')
+_von       = "true" if st.session_state.get("voice_enabled", True) else "false"
+_btn_cls   = "on" if st.session_state.get("voice_enabled", True) else ""
+_btn_lbl   = "🔔 Alerts ON" if st.session_state.get("voice_enabled", True) else "🔕 Alerts OFF"
+
+_st = (f"System status tick {s.tick}. "
+       f"Generation {s.total_gen_kw:.1f} kilowatts. "
+       f"Battery {s.bess_soc_pct:.0f} percent. "
+       f"Hydrogen {s.h2_kg_h*1000:.1f} grams per hour. "
+       f"LCOH {s.lcoh:.2f} euros per kilogram. "
+       f"Revenue {s.cum_revenue_eur:.2f} euros. "
+       + ("No active alerts." if not alrt.active else
+          f"{_n_err} critical, {_n_total} total alerts."))
+
+_hv = (f"Shift handover Zagreb LUMINIH2 at {now_dt.strftime('%H:%M')}. "
+       f"Hydrogen produced {s.cum_h2_kg:.3f} kilograms. "
+       f"Revenue {s.cum_revenue_eur:.2f} euros. "
+       f"Battery {s.bess_soc_pct:.0f} percent, health {s.bess_soh_pct:.1f} percent. "
+       f"Tank {s.main_tank_pct:.0f} percent. "
+       f"CO2 saved {s.cum_co2_kg:.2f} kilograms. "
+       + ("No alerts at handover." if not alrt.active
+          else f"{_n_total} alert{'s' if _n_total!=1 else ''} at handover.")
+       + " End of handover.")
+
+_prod  = f"Hydrogen {s.h2_kg_h*1000:.1f} grams per hour. Cumulative {s.cum_h2_kg:.3f} kilograms. Efficiency {s.elec_eff_pct:.0f} percent."
+_batt  = f"Battery {s.bess_soc_pct:.0f} percent charge. {s.bess_temp_c:.0f} degrees. Health {s.bess_soh_pct:.1f} percent."
+_alrm  = "No active alerts." if not alrt.active else f"{_n_total} active alerts."
+_lcoh_ = f"LCOH {s.lcoh:.2f} euros per kilogram. Target {Config.LCOH_TARGET_EURO_KG}."
+_rev_  = f"Session revenue {s.cum_revenue_eur:.2f} euros."
+
+components.html(
+    f"""<!DOCTYPE html><html><head><style>
+body{{margin:0;padding:0;background:transparent;font-family:-apple-system,sans-serif}}
+.vb_{{display:flex;align-items:center;gap:8px;padding:9px 14px;
+  background:linear-gradient(135deg,#f0f9ff,#f8fafc);
+  border:1px solid #bae6fd;border-radius:10px;flex-wrap:wrap}}
+.btn{{border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;
+  padding:6px 13px;transition:all .18s}}
+.btn:hover{{transform:scale(1.04)}}
+.bm{{background:#0ea5e9;color:#fff}}
+.bs{{background:#22c55e;color:#fff}}
+.bh{{background:#8b5cf6;color:#fff}}
+.bx{{background:#ef4444;color:#fff}}
+.bt{{background:#f1f5f9;color:#374151;border:1px solid #e2e8f0}}
+.bt.on{{background:#dcfce7;color:#15803d;border-color:#86efac}}
+.ww{{display:flex;align-items:center;gap:2px;height:20px}}
+.wb{{width:3px;border-radius:2px;background:#0ea5e9;height:3px}}
+#vs{{font-size:11px;color:#374151;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+</style></head><body>
+<div class="vb_">
+  <span style="font-size:13px;font-weight:700;color:#0c4a6e;white-space:nowrap">🔊 Voice</span>
+  <button class="btn bm" id="bmic" onclick="sl()" title="Voice command">🎤 Command</button>
+  <button class="btn bs" onclick="sp(ST)"            title="System status">📢 Status</button>
+  <button class="btn bh" onclick="sp(HV)"            title="Shift handover">📋 Handover</button>
+  <button class="btn bx" onclick="xa()"              title="Stop">⏹ Stop</button>
+  <button class="btn bt {_btn_cls}" id="btog" onclick="tv()" title="Alert announcements">{_btn_lbl}</button>
+  <div class="ww" id="ww"></div>
+  <span id="vs">Ready · commands: status · handover · production · battery · alerts · lcoh · revenue</span>
+</div>
+<script>
+var syn=window.speechSynthesis,rc=null,von={_von};
+var AL={_alert_js};
+var ST="{_st}";var HV="{_hv}";
+var PR="{_prod}";var BA="{_batt}";var AM="{_alrm}";var LC="{_lcoh_}";var RV="{_rev_}";
+var bars=[],wi=null;
+function bw(){{document.getElementById('ww').innerHTML='';bars=[];
+  for(var i=0;i<16;i++){{var b=document.createElement('div');b.className='wb';
+  document.getElementById('ww').appendChild(b);bars.push(b);}}}}
+function wave(on){{if(wi)clearInterval(wi);
+  if(!on){{bars.forEach(function(b){{b.style.height='3px';}});return;}}
+  wi=setInterval(function(){{bars.forEach(function(b,i){{
+    var h=Math.round(3+Math.abs(Math.sin(Date.now()/150+i*.5))*14);
+    b.style.height=h+'px';b.style.background=h>10?'#22c55e':'#0ea5e9';
+  }});}},50);}}
+function gv(){{var vs=syn.getVoices();
+  return vs.find(function(v){{return v.lang==='en-GB';}})||
+         vs.find(function(v){{return v.lang.startsWith('en');}})||null;}}
+function sp(t,r){{if(!syn)return;syn.cancel();
+  var u=new SpeechSynthesisUtterance(t);
+  u.lang='en-GB';u.rate=r||0.92;u.pitch=1.0;var v=gv();if(v)u.voice=v;
+  u.onstart=function(){{wave(true);document.getElementById('vs').textContent='Speaking…';}};
+  u.onend=u.onerror=function(){{wave(false);document.getElementById('vs').textContent='Ready';}};
+  bw();syn.speak(u);}}
+function xa(){{syn.cancel();if(rc){{try{{rc.stop();}}catch(e){{}}}}
+  wave(false);document.getElementById('vs').textContent='Stopped';}}
+function tv(){{von=!von;var b=document.getElementById('btog');
+  b.textContent=von?'🔔 Alerts ON':'🔕 Alerts OFF';b.classList.toggle('on',von);}}
+if(von&&AL.length>0)setTimeout(function(){{sp(AL.join('. '),0.88);}},700);
+var CM={{status:function(){{sp(ST);}},summary:function(){{sp(ST);}},
+  handover:function(){{sp(HV);}},production:function(){{sp(PR);}},
+  battery:function(){{sp(BA);}},alerts:function(){{sp(AM);}},
+  lcoh:function(){{sp(LC);}},revenue:function(){{sp(RV);}},
+  stop:function(){{xa();}}}};
+function sl(){{
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){{sp('Voice recognition requires Chrome or Edge.');return;}}
+  rc=new SR();rc.lang='en-GB';rc.interimResults=false;rc.maxAlternatives=3;
+  document.getElementById('vs').textContent='🎤 Listening…';
+  document.getElementById('bmic').style.background='#ef4444';wave(true);
+  rc.onresult=function(e){{
+    var t=e.results[0][0].transcript.toLowerCase().trim();
+    document.getElementById('vs').textContent='Heard: "'+t+'"';
+    wave(false);document.getElementById('bmic').style.background='#0ea5e9';
+    var hit=false;for(var c in CM){{if(t.indexOf(c)!==-1){{CM[c]();hit=true;break;}}}}
+    if(!hit)sp('Not recognised. Try: status, handover, production, battery, alerts, lcoh, or revenue.');
+  }};
+  rc.onerror=function(e){{wave(false);document.getElementById('bmic').style.background='#0ea5e9';
+    document.getElementById('vs').textContent='Mic error: '+e.error;}};
+  rc.onend=function(){{wave(false);document.getElementById('bmic').style.background='#0ea5e9';}};
+  rc.start();}}
+bw();
+</script></body></html>""",
+    height=72, scrolling=False)
+
 for a in alrt.errors():
     st.markdown(f'<div class="alert-error">🚨 [{a.code}] {a.message}</div>', unsafe_allow_html=True)
 for a in alrt.warnings():
