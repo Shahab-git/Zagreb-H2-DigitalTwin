@@ -401,7 +401,7 @@ with tabs[0]:
             marker=dict(colors=[C["solar"],C["wind"],C["grid"]],
                         line=dict(color="#ffffff",width=2))))
         fig.add_annotation(text=f"<b>{s.total_gen_kw:.1f}</b><br>kW",
-                           showarrow=False, font=dict(size=14,color="#111827"),
+                           showarrow=False, font=dict(size=14,color="#000000"),
                            x=0.5, y=0.5, xref="paper", yref="paper")
         fig.update_layout(**mk(height=220, showlegend=True,
                                legend=dict(orientation="h",y=-0.1,font_size=11)))
