@@ -48,11 +48,44 @@ html,body{background:#ffffff !important}
 .main .block-container{background:#ffffff !important;padding:.75rem 1.5rem 1rem}
 section[data-testid="stSidebar"]{background:#f1f5f9 !important;border-right:1px solid #cbd5e1 !important}
 [data-testid="stSidebarContent"]{background:#f1f5f9 !important}
-section[data-testid="stSidebar"] label{color:#1e293b !important;font-weight:500}
-section[data-testid="stSidebar"] p{color:#1e293b !important}
-section[data-testid="stSidebar"] h3{color:#0f172a !important}
-section[data-testid="stSidebar"] small{color:#374151 !important}
-[data-testid="stCaptionContainer"]{color:#374151 !important}
+
+/* All text elements in sidebar — black */
+section[data-testid="stSidebar"] *{color:#111827 !important}
+section[data-testid="stSidebar"] label{color:#111827 !important;font-size:13px !important;font-weight:600 !important}
+section[data-testid="stSidebar"] label p{color:#111827 !important;font-size:13px !important;font-weight:600 !important}
+section[data-testid="stSidebar"] p{color:#111827 !important;font-size:13px !important}
+section[data-testid="stSidebar"] span{color:#111827 !important}
+section[data-testid="stSidebar"] div{color:#111827 !important}
+section[data-testid="stSidebar"] small{color:#374151 !important;font-size:12px !important}
+section[data-testid="stSidebar"] h3{color:#0f172a !important;font-size:14px !important;font-weight:700 !important}
+
+/* Slider values and ticks in sidebar */
+section[data-testid="stSidebar"] [data-testid="stTickBarMin"],
+section[data-testid="stSidebar"] [data-testid="stTickBarMax"]{color:#374151 !important;font-size:12px !important;font-weight:600 !important}
+section[data-testid="stSidebar"] [data-testid="stThumbValue"]{color:#0ea5e9 !important;font-size:13px !important;font-weight:700 !important}
+
+/* Number inputs in sidebar */
+section[data-testid="stSidebar"] input{color:#111827 !important;font-size:13px !important;font-weight:600 !important;background:#ffffff !important}
+
+/* Select boxes in sidebar */
+section[data-testid="stSidebar"] select{color:#111827 !important;font-size:13px !important;background:#ffffff !important}
+section[data-testid="stSidebar"] [data-baseweb="select"] *{color:#111827 !important;font-size:13px !important}
+
+/* Radio buttons in sidebar */
+section[data-testid="stSidebar"] [data-testid="stRadio"] label p{color:#111827 !important;font-size:13px !important;font-weight:600 !important}
+
+/* Toggle / checkbox */
+section[data-testid="stSidebar"] [data-testid="stCheckbox"] label p{color:#111827 !important;font-size:13px !important;font-weight:600 !important}
+
+/* Caption text */
+[data-testid="stCaptionContainer"]{color:#374151 !important;font-size:12px !important}
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"]{color:#374151 !important}
+
+/* Markdown in sidebar */
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{color:#111827 !important;font-size:13px !important}
+
+/* Divider */
+section[data-testid="stSidebar"] hr{border-color:#cbd5e1 !important}
 
 .lumi-header{background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0ea5e9;
   border-radius:10px;padding:14px 20px;margin-bottom:16px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
