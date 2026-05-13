@@ -1915,7 +1915,7 @@ with tabs[6]:
             annotation_font_color="#ef4444",
             annotation_font_size=10)
 
-        oc_fig.update_layout(**mk(height=360,
+        oc_fig.update_layout(**mk(height=420,
             xaxis=dict(title="Electrolyzer power (kW)",
                        range=[0, Config.ELEC_P_MAX_KW + 0.4]),
             yaxis=dict(title="Efficiency η (%)", color=C["elec"],
@@ -1924,7 +1924,18 @@ with tabs[6]:
                         side="right", color=C["h2"]),
             yaxis3=dict(overlaying="y", side="right",
                         showgrid=False, showticklabels=False),
-            legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
+            # Vertical legend on right side — all 6 items always visible
+            legend=dict(
+                orientation="v",
+                x=1.12, y=1.0,
+                xanchor="left", yanchor="top",
+                font=dict(size=13, color="#111827"),
+                bgcolor="rgba(255,255,255,0.97)",
+                bordercolor="#e2e8f0", borderwidth=1,
+                itemsizing="constant",
+                itemwidth=30,
+            ),
+            margin=dict(t=32, b=56, l=52, r=180)))
         st.plotly_chart(oc_fig, use_container_width=True)
 
         # ── Row 2: H₂ vs profit scatter + sensitivity heatmap ─────────────
@@ -1954,16 +1965,16 @@ with tabs[6]:
             sc7.add_trace(go.Scatter(
                 x=[bl.annual_h2_kg], y=[bl.net_profit_eur],
                 mode="markers+text", name="◆ Best LCOH",
-                text=["◆ LCOH"], textposition="top right",
-                textfont=dict(size=10, color=C["bess"]),
+                text=["◆ Best LCOH"], textposition="top right",
+                textfont=dict(size=13, color=C["bess"], family="'Segoe UI',sans-serif"),
                 marker=dict(color=C["bess"], size=13, symbol="diamond",
                             line=dict(color="#fff", width=2))))
             # Best profit marker
             sc7.add_trace(go.Scatter(
                 x=[bp.annual_h2_kg], y=[bp.net_profit_eur],
                 mode="markers+text", name="★ Best profit",
-                text=["★ Profit"], textposition="top right",
-                textfont=dict(size=10, color=C["solar"]),
+                text=["★ Best profit"], textposition="top right",
+                textfont=dict(size=13, color=C["solar"], family="'Segoe UI',sans-serif"),
                 marker=dict(color=C["solar"], size=13, symbol="star",
                             line=dict(color="#fff", width=2))))
             # Break-even
@@ -1975,7 +1986,16 @@ with tabs[6]:
             sc7.update_layout(**mk(height=310,
                 xaxis_title="Annual H₂ production (kg/yr)",
                 yaxis_title="Net annual profit (€)",
-                legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
+                legend=dict(
+                    orientation="v",
+                    x=1.02, y=1.0,
+                    xanchor="left", yanchor="top",
+                    font=dict(size=13, color="#111827"),
+                    bgcolor="rgba(255,255,255,0.97)",
+                    bordercolor="#e2e8f0", borderwidth=1,
+                    itemsizing="constant",
+                ),
+                margin=dict(t=32, b=56, l=52, r=160)))
             st.plotly_chart(sc7, use_container_width=True)
 
         with r7b:
