@@ -289,43 +289,195 @@ def hrow(lbl, val, unit, ok, warn, fmt=".1f"):
 # SIDEBAR
 # =============================================================================
 with st.sidebar:
-    st.markdown("<h3 style='color:#0f172a;margin-bottom:8px'>⚡ LUMINIH2 Control</h3>",
-                unsafe_allow_html=True)
+
+    # ── Brand header ───────────────────────────────────────────────────────
+    st.markdown(f"""
+<div style="background:linear-gradient(135deg,#0ea5e9,#6366f1);
+  border-radius:12px;padding:14px 16px;margin-bottom:12px;text-align:center">
+  <div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:.04em">
+    ⚡ LUMINIH2
+  </div>
+  <div style="font-size:11px;color:rgba(255,255,255,.85);margin-top:3px;font-weight:500">
+    Digital Twin v4.2 · {Config.location.city}, {Config.location.country}
+  </div>
+</div>""", unsafe_allow_html=True)
+
+    # ── Live status mini-card ──────────────────────────────────────────────
+    _s = st.session_state.last_state
+    if _s:
+        _soc_w  = min(100, _s.bess_soc_pct)
+        _gen_w  = min(100, _s.total_gen_kw /
+                      (Config.PV_SYSTEM_CAPACITY_KW + Config.WIND_SYSTEM_CAPACITY_KW) * 100)
+        _h2_w   = min(100, _s.h2_kg_h * 1000 /
+                      (Config.electrolyzer.h2_peak_kg_h * 1000) * 100)
+        _soc_c  = "#22c55e" if _s.bess_soc_pct > 30 else "#f59e0b" if _s.bess_soc_pct > 15 else "#ef4444"
+        _gen_c  = "#f59e0b"
+        _h2_c   = "#0ea5e9"
+        st.markdown(f"""
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;
+  padding:12px 14px;margin-bottom:12px">
+  <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:10px">Live system status</div>
+
+  <div style="margin-bottom:7px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;
+      font-weight:600;color:#111827;margin-bottom:3px">
+      <span>☀ Generation</span><span>{_s.total_gen_kw:.1f} kW</span>
+    </div>
+    <div style="background:#e2e8f0;border-radius:999px;height:7px;overflow:hidden">
+      <div style="background:{_gen_c};width:{_gen_w:.0f}%;height:100%;border-radius:999px"></div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:7px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;
+      font-weight:600;color:#111827;margin-bottom:3px">
+      <span>🔋 Battery SoC</span><span>{_s.bess_soc_pct:.0f}%</span>
+    </div>
+    <div style="background:#e2e8f0;border-radius:999px;height:7px;overflow:hidden">
+      <div style="background:{_soc_c};width:{_soc_w:.0f}%;height:100%;border-radius:999px"></div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:7px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;
+      font-weight:600;color:#111827;margin-bottom:3px">
+      <span>⚗ H₂ rate</span><span>{_s.h2_kg_h*1000:.1f} g/h</span>
+    </div>
+    <div style="background:#e2e8f0;border-radius:999px;height:7px;overflow:hidden">
+      <div style="background:{_h2_c};width:{_h2_w:.0f}%;height:100%;border-radius:999px"></div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:7px;
+      padding:6px 8px;text-align:center">
+      <div style="font-size:10px;color:#15803d;font-weight:600">LCOH</div>
+      <div style="font-size:14px;font-weight:700;color:#111827">€{_s.lcoh:.2f}</div>
+      <div style="font-size:9px;color:#64748b">/kg</div>
+    </div>
+    <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:7px;
+      padding:6px 8px;text-align:center">
+      <div style="font-size:10px;color:#1d4ed8;font-weight:600">Revenue</div>
+      <div style="font-size:14px;font-weight:700;color:#111827">€{_s.cum_revenue_eur:.2f}</div>
+      <div style="font-size:9px;color:#64748b">session</div>
+    </div>
+  </div>
+
+  <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f1f5f9;
+    font-size:11px;color:#64748b;text-align:center">
+    Tick #{_s.tick} · {now_dt.strftime("%H:%M:%S") if "now_dt" in dir() else "--:--:--"}
+  </div>
+</div>""", unsafe_allow_html=True)
+
+    # ── Simulation control ─────────────────────────────────────────────────
+    st.markdown("""<div style="font-size:12px;font-weight:700;color:#0f172a;
+      text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">
+      ⚙ Simulation</div>""", unsafe_allow_html=True)
     st.session_state.sim_running = st.toggle(
         "Live simulation", value=st.session_state.sim_running)
-    refresh = st.slider("Refresh (sec)", 2, 15, 4)
-    st.divider()
-    st.markdown("<h3 style='color:#0f172a;margin:8px 0 6px'>🌦 Weather Override</h3>",
-                unsafe_allow_html=True)
-    use_ov = st.checkbox("Manual override")
+    refresh = st.slider("Refresh interval (sec)", 2, 15, 4)
+    st.markdown("<div style='margin:10px 0 4px'></div>", unsafe_allow_html=True)
+
+    # ── Weather override ───────────────────────────────────────────────────
+    st.markdown("""<div style="font-size:12px;font-weight:700;color:#0f172a;
+      text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">
+      🌦 Weather Override</div>""", unsafe_allow_html=True)
+    use_ov = st.checkbox("Enable manual override")
     ov = None
     if use_ov:
+        st.markdown(
+            '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;'
+            'padding:6px 10px;font-size:11px;color:#92400e;font-weight:600;margin-bottom:8px">'
+            '⚠ Overriding live weather data</div>', unsafe_allow_html=True)
         ov = {
-            "irradiance": st.slider("Irradiance W/m²", 0, 1000, 500),
-            "wind_ms":    st.slider("Wind speed m/s", 0.0, 25.0, 6.0, 0.1),
-            "temp_c":     st.slider("Temperature °C", -10, 45, 20),
+            "irradiance": st.slider("☀ Irradiance (W/m²)", 0, 1000, 500, 10),
+            "wind_ms":    st.slider("💨 Wind speed (m/s)", 0.0, 25.0, 6.0, 0.1),
+            "temp_c":     st.slider("🌡 Temperature (°C)", -10, 45, 20),
         }
-    st.divider()
-    st.markdown("<h3 style='color:#0f172a;margin:8px 0 6px'>🔋 EV & Grid</h3>",
-                unsafe_allow_html=True)
-    ev_demand  = st.slider("EV demand (kW)", 0.0, Config.EV_CHARGER_POWER_KW, 2.0, 0.5)
+    else:
+        _wx_src = getattr(st.session_state.last_state, "wx_source", "—")                   if st.session_state.last_state else "—"
+        st.markdown(
+            f'<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;'
+            f'padding:6px 10px;font-size:11px;color:#15803d;font-weight:600">'
+            f'● Live Open-Meteo · Source: {_wx_src.upper()}</div>',
+            unsafe_allow_html=True)
+    st.markdown("<div style='margin:10px 0 4px'></div>", unsafe_allow_html=True)
+
+    # ── EV & Grid control ──────────────────────────────────────────────────
+    st.markdown("""<div style="font-size:12px;font-weight:700;color:#0f172a;
+      text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">
+      🔌 EV & Grid</div>""", unsafe_allow_html=True)
+    ev_demand  = st.slider(
+        "EV charger demand (kW)", 0.0, Config.EV_CHARGER_POWER_KW, 2.0, 0.5)
+    st.markdown(
+        f'<div style="font-size:11px;color:#374151;margin-top:-6px;margin-bottom:8px">'
+        f'{ev_demand:.1f} / {Config.EV_CHARGER_POWER_KW} kW · '
+        f'{"● Active" if ev_demand > 0 else "○ Off"}</div>',
+        unsafe_allow_html=True)
     force_bess = st.checkbox("Force BESS charge from grid")
-    st.divider()
-    st.markdown("<h3 style='color:#0f172a;margin:8px 0 6px'>📈 Scenario Settings</h3>",
-                unsafe_allow_html=True)
-    sc_h2_price  = st.slider("H₂ sell price (€/kg)", 3.0, 12.0, 6.0, 0.5)
-    sc_capex     = st.number_input("CAPEX (€)", value=250000, step=10000)
-    sc_opex      = st.number_input("OPEX/year (€)", value=8000, step=500)
-    sc_elec_mode = st.selectbox("EMS mode", ["h2_max", "lcoh_opt", "grid_first"])
-    st.divider()
-    if st.button("🔄 Reset simulation"):
+    if force_bess:
+        st.markdown(
+            '<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:6px;'
+            'padding:5px 9px;font-size:11px;color:#1d4ed8;font-weight:600">'
+            '🔋 BESS forcing grid import</div>', unsafe_allow_html=True)
+    st.markdown("<div style='margin:10px 0 4px'></div>", unsafe_allow_html=True)
+
+    # ── Scenario settings ──────────────────────────────────────────────────
+    st.markdown("""<div style="font-size:12px;font-weight:700;color:#0f172a;
+      text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">
+      📈 Scenario Settings</div>""", unsafe_allow_html=True)
+    sc_h2_price = st.slider("H₂ sell price (€/kg)", 3.0, 12.0, 6.0, 0.5)
+    st.markdown(
+        f'<div style="font-size:11px;color:#374151;margin-top:-6px;margin-bottom:8px">'
+        f'Market: €{sc_h2_price:.1f}/kg · '
+        f'{"Above break-even ✅" if sc_h2_price >= 5.0 else "Below break-even ⚠"}</div>',
+        unsafe_allow_html=True)
+    sc_capex     = st.number_input("CAPEX (€)", value=250_000, step=10_000,
+                                    min_value=0, max_value=10_000_000)
+    sc_opex      = st.number_input("Annual OPEX (€)", value=8_000, step=500,
+                                    min_value=0, max_value=500_000)
+    sc_elec_mode = st.selectbox(
+        "EMS priority mode",
+        ["h2_max", "lcoh_opt", "grid_first"],
+        format_func=lambda x: {
+            "h2_max":     "⚗ H₂ max — peak production",
+            "lcoh_opt":   "💰 LCOH optimised",
+            "grid_first": "🌐 Grid-first export",
+        }.get(x, x))
+    st.markdown("<div style='margin:10px 0 4px'></div>", unsafe_allow_html=True)
+
+    # ── Device quick-reference ─────────────────────────────────────────────
+    with st.expander("📋 Device specifications", expanded=False):
+        st.markdown(f"""
+<div style="font-size:11px;color:#111827;line-height:1.8">
+  <b>☀ PV array</b> — {Config.PV_SYSTEM_CAPACITY_KW} kW · 42 × 360W mono<br>
+  <b>💨 Wind HAWT</b> — {Config.WIND_SYSTEM_CAPACITY_KW} kW · cut-in 2.5 m/s<br>
+  <b>🔋 BESS LFP</b> — {Config.BATT_CAPACITY_KWH} kWh · SoC {Config.BATT_SOC_MIN*100:.0f}–{Config.BATT_SOC_MAX*100:.0f}%<br>
+  <b>⚗ S30/30 PEM</b> — {Config.ELEC_P_MIN_KW}–{Config.ELEC_P_MAX_KW} kW · {Config.electrolyzer.mttf_hours:,}h MTTF<br>
+  <b>🪣 TH540-50</b> — {Config.MAIN_TANK_CAPACITY_KG} kg · {Config.SAFETY_MAX_PRESSURE_BAR:.0f} bar MWP<br>
+  <b>⚡ AIRCELL 3000</b> — {Config.FC_POWER_NOM_KW} kW · 99.95% H₂ req.<br>
+  <b>🔩 HCS-100</b> — 2 kg/day · {Config.compressor.outlet_nom_bar:.0f} bar outlet<br>
+  <b>🌐 Grid Croatia</b> — buy €{Config.GRID_PRICE_BUY}/kWh · sell €{Config.GRID_PRICE_SELL}/kWh
+</div>""", unsafe_allow_html=True)
+
+    # ── Reset + version ────────────────────────────────────────────────────
+    st.markdown("<div style='margin:8px 0 6px'></div>", unsafe_allow_html=True)
+    if st.button("🔄 Reset simulation", use_container_width=True):
         for k in list(st.session_state.keys()):
             del st.session_state[k]
         st.rerun()
-    st.markdown(
-        f"<small style='color:#374151'>v4.2 · {Config.location.city}, {Config.location.country}<br>"
-        f"PV: {Config.PV_SYSTEM_CAPACITY_KW} kW · Wind: {Config.WIND_SYSTEM_CAPACITY_KW} kW</small>",
-        unsafe_allow_html=True)
+    st.markdown(f"""
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
+  padding:8px 10px;margin-top:8px;text-align:center">
+  <div style="font-size:11px;color:#374151;font-weight:600">LUMINIH2 Digital Twin</div>
+  <div style="font-size:10px;color:#94a3b8;margin-top:2px">
+    v4.2 · Zagreb, Croatia · IEC 62541
+  </div>
+  <div style="font-size:10px;color:#94a3b8">
+    PV {Config.PV_SYSTEM_CAPACITY_KW} kW · Wind {Config.WIND_SYSTEM_CAPACITY_KW} kW · BESS {Config.BATT_CAPACITY_KWH} kWh
+  </div>
+</div>""", unsafe_allow_html=True)
 
 # =============================================================================
 # PHYSICS TICK
