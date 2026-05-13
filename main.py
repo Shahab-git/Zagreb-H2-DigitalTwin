@@ -1764,6 +1764,47 @@ with tabs[6]:
     st.markdown('<p class="sec-hdr">Economic operating point optimiser — ITM S30/30</p>',
                 unsafe_allow_html=True)
 
+    # ── Controls CSS — larger, bolder labels and values ───────────────────
+    st.markdown("""
+<style>
+/* Optimizer controls — larger slider labels */
+[data-testid="stSlider"] label p {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+}
+/* Slider min/max value text */
+[data-testid="stSlider"] [data-testid="stTickBarMin"],
+[data-testid="stSlider"] [data-testid="stTickBarMax"] {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+}
+/* Current slider value bubble */
+[data-testid="stSlider"] [data-testid="stThumbValue"] {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    color: #0ea5e9 !important;
+}
+/* Radio label */
+[data-testid="stRadio"] label p {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+}
+/* Radio option text */
+[data-testid="stRadio"] [data-testid="stMarkdownContainer"] p {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #111827 !important;
+}
+/* Slider track colour */
+[data-testid="stSlider"] [role="slider"] {
+    background: #0ea5e9 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
     # ── Controls row ───────────────────────────────────────────────────────
     ctl = st.columns([2, 2, 2, 1])
     with ctl[0]:
@@ -1773,14 +1814,31 @@ with tabs[6]:
             float(min(s.total_gen_kw,
                 Config.PV_SYSTEM_CAPACITY_KW + Config.WIND_SYSTEM_CAPACITY_KW)),
             0.1, key="opt_pwr")
+        st.markdown(
+            f'<div style="font-size:13px;font-weight:600;color:#0ea5e9;'
+            f'margin-top:-8px">Current: <b>{opt_power:.2f} kW</b> '
+            f'(PV {Config.PV_SYSTEM_CAPACITY_KW:.0f} + Wind '
+            f'{Config.WIND_SYSTEM_CAPACITY_KW:.0f} kW max)</div>',
+            unsafe_allow_html=True)
     with ctl[1]:
         opt_h2_price = st.slider(
             "H₂ sell price (€/kg)", 3.0, 12.0,
             float(sc_h2_price), 0.5, key="opt_h2p")
+        st.markdown(
+            f'<div style="font-size:13px;font-weight:600;color:#0ea5e9;'
+            f'margin-top:-8px">Selected: <b>€{opt_h2_price:.1f}/kg</b> '
+            f'· Market range €3–12/kg</div>',
+            unsafe_allow_html=True)
     with ctl[2]:
         opt_source = st.radio(
             "Energy source", ["renewable", "grid"],
             horizontal=True, key="opt_src")
+        src_note = ("☀ O&M cost only — no fuel cost" if opt_source == "renewable"
+                    else f"🌐 Grid price €{Config.GRID_PRICE_BUY}/kWh")
+        st.markdown(
+            f'<div style="font-size:13px;font-weight:600;color:#374151;'
+            f'margin-top:-8px">{src_note}</div>',
+            unsafe_allow_html=True)
     with ctl[3]:
         st.markdown("<br>", unsafe_allow_html=True)
         run_opt = st.button("🔍 Optimise", type="primary",
