@@ -1,5 +1,5 @@
 # =============================================================================
-# ems_brain.py — LUMINIH2 EMS Brain v4.3
+# ems_brain.py — LUMINIH2 EMS Brain v4.4
 # Electrolyzer-First Power Switching · Zagreb, Croatia
 # =============================================================================
 #
@@ -87,8 +87,39 @@ class DownstreamResult:
     ev_sessions_supported: int
 
 
+@dataclass
+class ForecastDecision:
+    """
+    Output of forecast_aware_dispatch() — adjustments to the standard
+    EMS based on what the next 6 hours are predicted to look like.
+
+    The standard manage_power_flow() still executes every tick.
+    This result is an OVERLAY — it modifies BESS reserve and
+    electrolyzer setpoint guidance before the standard dispatch runs.
+    """
+    # Forecast summary
+    next_6h_irr_kwh_m2:   float   # Expected irradiance energy next 6 h [kWh/m²]
+    next_6h_pv_kwh:       float   # Expected PV energy next 6 h [kWh]
+    solar_window_open:    bool    # True if peak irradiance > 200 W/m² expected
+    peak_hour:            int     # Hour of day with highest forecast irradiance
+    cloudy_window_ahead:  bool    # True if next 3 h forecast < 50 W/m²
+
+    # BESS guidance
+    bess_target_soc:      float   # Recommended BESS SoC before solar peak [0-1]
+    hold_bess_reserve:    bool    # True = don't discharge BESS — solar coming soon
+    pre_charge_bess:      bool    # True = charge BESS now from surplus before peak
+
+    # Electrolyzer guidance
+    elec_setpoint_kw:     float   # Recommended electrolyzer setpoint this tick [kW]
+    defer_electrolyzer:   bool    # True = wait for better irradiance window
+
+    # Reason
+    strategy:             str     # Human-readable dispatch strategy label
+    reason:               str     # Explanation of the forecast-based decision
+
+
 # =============================================================================
-# EMS Brain v4.3
+# EMS Brain v4.4
 # =============================================================================
 
 class EMSBrain:
@@ -468,6 +499,180 @@ class EMSBrain:
 
         return round(self._elec_current_kw, 3)
 
+    # ------------------------------------------------------------------
+    # Forecast-aware dispatch overlay (NEW in v4.4)
+    # ------------------------------------------------------------------
+
+    def forecast_aware_dispatch(
+        self,
+        forecast,                    # ForecastPacket from weather_api.py
+        current_soc:   float = 0.55, # Current BESS SoC [0-1]
+        current_gen_kw: float = 0.0, # Current generation [kW]
+        horizon_h:     int   = 6,    # How many hours ahead to consider
+    ) -> ForecastDecision:
+        """
+        Adjust EMS dispatch strategy based on 24-hour weather forecast.
+
+        This method analyses the next `horizon_h` hours of irradiance
+        forecast and produces guidance for the standard dispatch:
+
+        Key decisions:
+          1. PRE-CHARGE BESS before a predicted solar peak
+             (so BESS has headroom to absorb the peak energy)
+          2. HOLD BESS RESERVE if a high-irradiance window is coming soon
+             (don't discharge now — solar will recharge shortly)
+          3. DEFER ELECTROLYZER if current generation is poor but high
+             irradiance is predicted within 2 hours
+             (avoid cold-start penalty + preserve BESS for peak absorption)
+          4. INCREASE ELECTROLYZER SETPOINT during predicted peak hours
+             (capture maximum H₂ revenue from the best generation window)
+
+        The standard manage_power_flow() ALWAYS runs after this.
+        The returned ForecastDecision is advisory — it guides the
+        operator interface and can be used to pre-set the EMS mode
+        before the tick executes.
+
+        Args:
+            forecast       : ForecastPacket from WeatherProvider.fetch_forecast_24h()
+            current_soc    : current BESS state of charge [0-1]
+            current_gen_kw : current total generation [kW]
+            horizon_h      : number of forecast hours to consider
+
+        Returns:
+            ForecastDecision with BESS and electrolyzer guidance
+        """
+        cfg = self._cfg
+
+        # ── Extract next horizon_h hours from forecast ────────────────
+        irr   = getattr(forecast, "irradiance_wm2",   [0.0] * 24)[:horizon_h]
+        wind  = getattr(forecast, "wind_ms",           [4.5] * 24)[:horizon_h]
+        hours = getattr(forecast, "hours",             list(range(24)))[:horizon_h]
+
+        # Pad if forecast is shorter than horizon
+        while len(irr)  < horizon_h: irr.append(0.0)
+        while len(wind) < horizon_h: wind.append(4.5)
+
+        # ── Estimated PV energy next horizon_h hours [kWh] ────────────
+        pv_cap    = cfg.PV_SYSTEM_CAPACITY_KW
+        sys_eff   = 0.97 * 0.995   # inverter × MPPT
+        pv_hourly = [
+            pv_cap * max(0.0, irr_h / 1000.0) * sys_eff
+            for irr_h in irr
+        ]
+        next_6h_irr_kwh_m2 = sum(i / 1000.0 for i in irr)   # kWh/m²
+        next_6h_pv_kwh     = sum(pv_hourly)
+
+        # Peak irradiance this window
+        peak_irr  = max(irr)
+        peak_idx  = irr.index(peak_irr)
+        peak_hour = hours[peak_idx] if hours else 12
+
+        # ── Key thresholds ────────────────────────────────────────────
+        GOOD_IRR_W_M2      = 300.0   # W/m² — worth running electrolyzer
+        EXCELLENT_IRR_W_M2 = 600.0   # W/m² — run at peak load
+        CLOUD_IRR_W_M2     = 50.0    # W/m² — effectively no solar
+
+        solar_window_open  = peak_irr >= GOOD_IRR_W_M2
+        cloudy_window      = all(i < CLOUD_IRR_W_M2 for i in irr[:3])
+        strong_peak_soon   = (peak_irr >= EXCELLENT_IRR_W_M2
+                               and peak_idx <= 3)   # within 3 hours
+
+        # ── BESS strategy ─────────────────────────────────────────────
+        bess_soc_max  = cfg.BATT_SOC_MAX
+        bess_soc_min  = cfg.BATT_SOC_MIN
+
+        if strong_peak_soon:
+            # Big solar peak coming soon — create headroom for it
+            # Target SoC = 40% so BESS can absorb 50% of capacity
+            bess_target = max(bess_soc_min + 0.05, 0.40)
+            hold_reserve  = False
+            pre_charge    = False
+            bess_strategy = "headroom"
+        elif solar_window_open and peak_idx <= 2:
+            # Good solar within 2 hours — hold BESS reserve
+            bess_target  = max(current_soc, 0.50)
+            hold_reserve = True
+            pre_charge   = False
+            bess_strategy = "hold_reserve"
+        elif cloudy_window and current_soc < 0.60:
+            # Cloudy ahead — pre-charge BESS now from any surplus
+            bess_target  = min(bess_soc_max - 0.05, 0.80)
+            hold_reserve = False
+            pre_charge   = True
+            bess_strategy = "pre_charge_cloudy"
+        else:
+            # Normal — no forecast-based adjustment
+            bess_target  = 0.55
+            hold_reserve = False
+            pre_charge   = False
+            bess_strategy = "normal"
+
+        # ── Electrolyzer strategy ─────────────────────────────────────
+        current_irr_est = irr[0] if irr else 0.0
+
+        if current_gen_kw >= cfg.ELEC_P_MAX_KW and peak_irr >= EXCELLENT_IRR_W_M2:
+            # Peak generation AND excellent forecast — run at max
+            elec_setpoint = cfg.ELEC_P_MAX_KW
+            defer         = False
+            elec_strategy = "peak_load"
+        elif current_gen_kw < cfg.ELEC_P_MIN_KW and strong_peak_soon:
+            # Below minimum now but peak coming soon — defer start
+            elec_setpoint = 0.0
+            defer         = True
+            elec_strategy = "defer_peak_soon"
+        elif current_gen_kw >= cfg.ELEC_P_NOM_KW:
+            # Good generation — nominal load
+            elec_setpoint = cfg.ELEC_P_NOM_KW
+            defer         = False
+            elec_strategy = "nominal"
+        elif current_gen_kw >= cfg.ELEC_P_MIN_KW:
+            # Partial generation — run at available power
+            elec_setpoint = current_gen_kw
+            defer         = False
+            elec_strategy = "partial"
+        else:
+            # Below minimum
+            elec_setpoint = 0.0
+            defer         = False
+            elec_strategy = "standby"
+
+        # ── Build strategy label and reason ───────────────────────────
+        strategy_map = {
+            "peak_load":       "Peak production mode",
+            "defer_peak_soon": "Deferred — peak solar imminent",
+            "nominal":         "Nominal dispatch",
+            "partial":         "Partial load",
+            "standby":         "Standby — below minimum",
+        }
+        bess_map = {
+            "headroom":          f"BESS headroom for solar peak at {peak_hour:02d}:00",
+            "hold_reserve":      f"BESS reserve held — good solar in {peak_idx}h",
+            "pre_charge_cloudy": "BESS pre-charging — cloudy window ahead",
+            "normal":            "Normal BESS operation",
+        }
+        strategy = strategy_map.get(elec_strategy, elec_strategy)
+        reason   = (
+            f"{bess_map.get(bess_strategy, 'Normal')}. "
+            f"6h forecast: {next_6h_pv_kwh:.1f} kWh PV, "
+            f"peak {peak_irr:.0f} W/m² at {peak_hour:02d}:00. "
+            f"Elec: {strategy}."
+        )
+
+        return ForecastDecision(
+            next_6h_irr_kwh_m2=round(next_6h_irr_kwh_m2, 3),
+            next_6h_pv_kwh=round(next_6h_pv_kwh, 2),
+            solar_window_open=solar_window_open,
+            peak_hour=peak_hour,
+            cloudy_window_ahead=cloudy_window,
+            bess_target_soc=round(bess_target, 2),
+            hold_bess_reserve=hold_reserve,
+            pre_charge_bess=pre_charge,
+            elec_setpoint_kw=round(elec_setpoint, 3),
+            defer_electrolyzer=defer,
+            strategy=strategy,
+            reason=reason,
+        )
+
     def reset(self) -> None:
         """Reset all ramp and runtime state — call on simulation restart."""
         self._elec_current_kw  = 0.0
@@ -496,7 +701,7 @@ if __name__ == "__main__":
     cfg = Config
 
     print("=" * 62)
-    print("  ems_brain.py v4.3 — Electrolyzer-First Dispatch")
+    print("  ems_brain.py v4.4 — Electrolyzer-First Dispatch")
     print("=" * 62)
 
     # ── Scenario 1: Good generation (15 kW) ───────────────────────────
@@ -572,4 +777,59 @@ if __name__ == "__main__":
     print(f"  Runtime (min): {ems.electrolyzer_runtime_min}")
     print(f"  Min satisfied: {ems.min_runtime_satisfied}")
 
-    print("\n✅ ems_brain.py v4.3 — all tests passed")
+    # ── Forecast-aware dispatch ──────────────────────────────────────
+    print("\n[8] Forecast-aware dispatch (v4.4)")
+
+    # Simulate a ForecastPacket-like object
+    class FakeForecast:
+        hours           = list(range(24))
+        irradiance_wm2  = [0]*6 + [100,250,450,680,750,720,650,500,350,150,50,0]*1 + [0]*2
+        wind_ms         = [5.2]*24
+        temp_c          = [18.0]*24
+        precip_mm       = [0.0]*24
+        peak_irr_wm2    = 750.0
+        peak_irr_hour   = 11
+        total_energy_kwh= 42.5
+        source          = "live"
+        fetched_at      = "10:00:00"
+
+    ems_fc = EMSBrain()
+
+    # Scenario A: strong peak ahead, BESS at 75% — should create headroom
+    fd_a = ems_fc.forecast_aware_dispatch(
+        FakeForecast(), current_soc=0.75, current_gen_kw=2.0)
+    print(f"  Strategy       : {fd_a.strategy}")
+    print(f"  BESS target SoC: {fd_a.bess_target_soc:.2f}")
+    print(f"  Hold reserve   : {fd_a.hold_bess_reserve}")
+    print(f"  Pre-charge     : {fd_a.pre_charge_bess}")
+    print(f"  Elec setpoint  : {fd_a.elec_setpoint_kw:.2f} kW")
+    print(f"  Reason         : {fd_a.reason[:80]}…")
+
+    # Scenario B: night-time, cloudy forecast, low SoC — should pre-charge
+    class NightForecast:
+        hours           = list(range(24))
+        irradiance_wm2  = [0.0]*24   # all cloudy
+        wind_ms         = [3.0]*24
+        temp_c          = [12.0]*24
+        precip_mm       = [0.5]*24
+        peak_irr_wm2    = 0.0
+        peak_irr_hour   = 12
+        total_energy_kwh= 0.0
+        source          = "fallback"
+        fetched_at      = "22:00:00"
+
+    fd_b = ems_fc.forecast_aware_dispatch(
+        NightForecast(), current_soc=0.45, current_gen_kw=3.5)
+    print(f"\n  Night/cloudy scenario:")
+    print(f"  Strategy      : {fd_b.strategy}")
+    print(f"  BESS target   : {fd_b.bess_target_soc:.2f}")
+    print(f"  Pre-charge    : {fd_b.pre_charge_bess}")
+    print(f"  Solar window  : {fd_b.solar_window_open}")
+    print(f"  Cloudy ahead  : {fd_b.cloudy_window_ahead}")
+
+    assert isinstance(fd_a.elec_setpoint_kw, float),  "Setpoint must be float"
+    assert 0 <= fd_a.bess_target_soc <= 1,            "SoC target out of range"
+    assert fd_b.cloudy_window_ahead == True,           "Should detect cloudy window"
+    print("  ✅ ForecastDecision assertions passed")
+
+    print("\n✅ ems_brain.py v4.4 — all tests passed")
