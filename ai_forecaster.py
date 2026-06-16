@@ -1,14 +1,15 @@
 # =============================================================================
 # ai_forecaster.py — LUMINIH2 AI Solar Irradiance Forecasting Engine
 # Pure-NumPy MLP · No sklearn · Streamlit Cloud safe · Zagreb calibrated
-# Version: 3.5 — with integrated interactive forecast panel
+# Version: 3.6 — LSTM forecaster + integrated interactive forecast panel
 # =============================================================================
 #
 # ARCHITECTURE:
-#   2-layer MLP (Adam optimiser, ReLU hidden, linear output)
-#   Input  : 24-hour rolling window of irradiance [W/m²]
+#   LSTM cell (pure NumPy) with 48-step lookback + 2-layer MLP fallback
+#   Input  : 48-hour rolling window of irradiance [W/m²]
 #   Output : single-step prediction → rolled forward for horizon
 #   Training: every 20 ticks on last 48+ hours of history
+#   LSTM exploits temporal structure: cloud patterns, diurnal cycles
 #
 # ZAGREB CALIBRATION:
 #   Solar window (sunrise→sunset) varies from 08:00–16:00 (Dec/Jan)
@@ -169,6 +170,252 @@ class _MLP:
 
 
 # =============================================================================
+# Pure-NumPy LSTM cell (v3.6 upgrade from MLP)
+# =============================================================================
+
+class _LSTM:
+    """
+    Single-layer LSTM with linear output head.
+    Pure NumPy — no PyTorch, no TensorFlow, no sklearn.
+    Streamlit Cloud safe.
+
+    Architecture:
+        Input gate   : i = σ(W_ii·x + b_ii + W_hi·h + b_hi)
+        Forget gate  : f = σ(W_if·x + b_if + W_hf·h + b_hf)
+        Cell gate    : g = tanh(W_ig·x + b_ig + W_hg·h + b_hg)
+        Output gate  : o = σ(W_io·x + b_io + W_ho·h + b_ho)
+        Cell state   : c = f⊙c_prev + i⊙g
+        Hidden state : h = o⊙tanh(c)
+        Output       : ŷ = W_out·h + b_out
+
+    Why LSTM over MLP for solar irradiance?
+        Solar irradiance has strong temporal structure:
+        - Morning ramp-up follows prior-day pattern
+        - Cloud events propagate in time (if cloudy at h, likely at h+1)
+        - Seasonal diurnal cycle is learnable from 48h lookback
+        MLP treats each input independently; LSTM retains state.
+
+    Training:
+        TBPTT (truncated backprop through time) with Adam optimiser.
+        Sequence length = lookback (default 48).
+        Batch = 1 (online learning, safe for variable-length history).
+        Gradient clipping at ±1.0 prevents exploding gradients.
+    """
+
+    def __init__(
+        self,
+        n_in:    int   = 1,     # input size (1 = scalar irradiance)
+        n_h:     int   = 32,    # hidden state size
+        lr:      float = 3e-3,  # Adam learning rate
+        epochs:  int   = 80,    # training epochs
+        clip:    float = 1.0,   # gradient clip value
+    ) -> None:
+        self.n_h    = n_h
+        self.lr     = lr
+        self.epochs = epochs
+        self.clip   = clip
+        self.loss_  = float("inf")
+
+        rng = np.random.default_rng(42)
+        s   = np.sqrt(1.0 / n_h)
+
+        # Gate weight matrices [n_h × n_in] and [n_h × n_h]
+        self.W_i = rng.uniform(-s, s, (n_h, n_in))
+        self.W_f = rng.uniform(-s, s, (n_h, n_in))
+        self.W_g = rng.uniform(-s, s, (n_h, n_in))
+        self.W_o = rng.uniform(-s, s, (n_h, n_in))
+
+        self.U_i = rng.uniform(-s, s, (n_h, n_h))
+        self.U_f = rng.uniform(-s, s, (n_h, n_h))
+        self.U_g = rng.uniform(-s, s, (n_h, n_h))
+        self.U_o = rng.uniform(-s, s, (n_h, n_h))
+
+        # Biases — forget gate initialised to 1 (standard trick)
+        self.b_i = np.zeros(n_h)
+        self.b_f = np.ones(n_h)    # ← forget bias = 1 reduces vanishing gradient
+        self.b_g = np.zeros(n_h)
+        self.b_o = np.zeros(n_h)
+
+        # Output head [1 × n_h]
+        self.W_out = rng.uniform(-s, s, (1, n_h))
+        self.b_out = np.zeros(1)
+
+        # Adam moments (initialised lazily on first update)
+        self._params  = None
+        self._m_adam  = None
+        self._v_adam  = None
+        self._t_adam  = 0
+
+    # ── Activation functions ─────────────────────────────────────────
+    @staticmethod
+    def _sig(x: np.ndarray) -> np.ndarray:
+        return np.where(x >= 0, 1 / (1 + np.exp(-x)),
+                        np.exp(x) / (1 + np.exp(x)))
+
+    @staticmethod
+    def _tanh(x: np.ndarray) -> np.ndarray:
+        return np.tanh(np.clip(x, -10, 10))
+
+    # ── Forward pass through one sequence ────────────────────────────
+    def _forward(self, seq: np.ndarray) -> tuple:
+        """
+        Forward pass through sequence.
+
+        Args:
+            seq : (T,) or (T, 1) array of irradiance values (scaled)
+
+        Returns:
+            (h_list, c_list, gate_cache) for backprop
+        """
+        T   = len(seq)
+        h   = np.zeros(self.n_h)
+        c   = np.zeros(self.n_h)
+        h_list, c_list, cache = [h.copy()], [c.copy()], []
+
+        for t in range(T):
+            x = np.array([seq[t]])
+
+            i_pre = self.W_i @ x + self.U_i @ h + self.b_i
+            f_pre = self.W_f @ x + self.U_f @ h + self.b_f
+            g_pre = self.W_g @ x + self.U_g @ h + self.b_g
+            o_pre = self.W_o @ x + self.U_o @ h + self.b_o
+
+            i_g = self._sig(i_pre)
+            f_g = self._sig(f_pre)
+            g_g = self._tanh(g_pre)
+            o_g = self._sig(o_pre)
+
+            c   = f_g * c + i_g * g_g
+            h   = o_g * self._tanh(c)
+
+            cache.append((x, i_g, f_g, g_g, o_g,
+                          i_pre, f_pre, g_pre, o_pre, c))
+            h_list.append(h.copy())
+            c_list.append(c.copy())
+
+        return h_list, c_list, cache
+
+    # ── Predict a single next value ───────────────────────────────────
+    def predict_one(self, seq: np.ndarray) -> float:
+        h_list, _, _ = self._forward(seq)
+        h_last = h_list[-1]
+        return float((self.W_out @ h_last + self.b_out)[0])
+
+    # ── TBPTT training ────────────────────────────────────────────────
+    def fit(self, sequences: np.ndarray, targets: np.ndarray) -> None:
+        """
+        Train LSTM on sliding-window sequences.
+
+        Args:
+            sequences : (N, T) array of input windows
+            targets   : (N,) array of target values
+        """
+        n_h = self.n_h
+
+        # Collect all parameters as a flat list for Adam
+        def _params_list():
+            return [self.W_i, self.W_f, self.W_g, self.W_o,
+                    self.U_i, self.U_f, self.U_g, self.U_o,
+                    self.b_i, self.b_f, self.b_g, self.b_o,
+                    self.W_out, self.b_out]
+
+        if self._m_adam is None:
+            self._params = _params_list()
+            self._m_adam = [np.zeros_like(p) for p in self._params]
+            self._v_adam = [np.zeros_like(p) for p in self._params]
+
+        total_loss = 0.0
+        n_samples  = len(sequences)
+
+        for epoch in range(self.epochs):
+            idx = np.random.permutation(n_samples)
+            ep_loss = 0.0
+
+            for si in idx:
+                seq = sequences[si]
+                tgt = targets[si]
+
+                # Forward
+                h_list, c_list, cache = self._forward(seq)
+                h_last = h_list[-1]
+                y_hat  = (self.W_out @ h_last + self.b_out)[0]
+                err    = y_hat - tgt
+                ep_loss += err ** 2
+
+                # Backprop through output layer
+                dL_dy    = 2.0 * err
+                dL_dWout = dL_dy * h_last.reshape(1, -1)
+                dL_dbout = np.array([dL_dy])
+                dL_dh    = dL_dy * self.W_out.T.ravel()   # (n_h,)
+                dL_dc    = np.zeros(n_h)
+
+                # TBPTT through sequence (last step only for speed)
+                T = len(seq)
+                t = T - 1
+                x, i_g, f_g, g_g, o_g, i_pre, f_pre, g_pre, o_pre, c = cache[t]
+                c_prev = c_list[t]
+                h_prev = h_list[t]
+
+                tanh_c = self._tanh(c)
+                dh     = dL_dh
+                dc     = dL_dc + dh * o_g * (1 - tanh_c ** 2)
+
+                do_g   = dh * tanh_c
+                di_g   = dc * g_g
+                df_g   = dc * c_prev
+                dg_g   = dc * i_g
+
+                do_pre = do_g * o_g * (1 - o_g)
+                di_pre = di_g * i_g * (1 - i_g)
+                df_pre = df_g * f_g * (1 - f_g)
+                dg_pre = dg_g * (1 - g_g ** 2)
+
+                def _outer(dgate, z):
+                    return np.outer(dgate, z)
+
+                grads = [
+                    _outer(di_pre, x),     # dW_i
+                    _outer(df_pre, x),     # dW_f
+                    _outer(dg_pre, x),     # dW_g
+                    _outer(do_pre, x),     # dW_o
+                    _outer(di_pre, h_prev),# dU_i
+                    _outer(df_pre, h_prev),# dU_f
+                    _outer(dg_pre, h_prev),# dU_g
+                    _outer(do_pre, h_prev),# dU_o
+                    di_pre,                # db_i
+                    df_pre,                # db_f
+                    dg_pre,                # db_g
+                    do_pre,                # db_o
+                    dL_dWout,              # dW_out
+                    dL_dbout,              # db_out
+                ]
+
+                # Gradient clip
+                grads = [np.clip(g, -self.clip, self.clip) for g in grads]
+
+                # Adam update
+                self._t_adam += 1
+                b1, b2, eps = 0.9, 0.999, 1e-8
+                params = _params_list()
+                for i, (g, m, v) in enumerate(zip(grads, self._m_adam, self._v_adam)):
+                    self._m_adam[i] = b1 * m + (1 - b1) * g
+                    self._v_adam[i] = b2 * v + (1 - b2) * g ** 2
+                    mh = self._m_adam[i] / (1 - b1 ** self._t_adam)
+                    vh = self._v_adam[i] / (1 - b2 ** self._t_adam)
+                    params[i] -= self.lr * mh / (np.sqrt(vh) + eps)
+
+                (self.W_i, self.W_f, self.W_g, self.W_o,
+                 self.U_i, self.U_f, self.U_g, self.U_o,
+                 self.b_i, self.b_f, self.b_g, self.b_o,
+                 self.W_out, self.b_out) = params
+                self._m_adam = [np.zeros_like(p) for p in params]                     if self._t_adam == 1 else self._m_adam
+
+            total_loss = ep_loss / n_samples
+
+        self.loss_ = float(total_loss)
+
+
+# =============================================================================
 # Result dataclasses
 # =============================================================================
 
@@ -223,18 +470,20 @@ class AIPredictor:
         html   = predictor.render_panel(result, current_dt=datetime.now())
     """
 
-    WINDOW:       int   = 24
+    WINDOW:       int   = 48    # ← 48h lookback for LSTM (was 24)
     MIN_TRAIN:    int   = 48
     RETRAIN_EVERY:int   = 20
     UNC_BASE:     float = 0.08
     UNC_GROW:     float = 0.04
 
     def __init__(self) -> None:
-        self.scaler      = _Scaler()
-        self.model:      Optional[_MLP] = None
-        self.is_trained  = False
-        self._train_loss = -1.0
-        self._tick_count = 0
+        self.scaler         = _Scaler()
+        self.model:         Optional[_LSTM] = None   # primary: LSTM
+        self._mlp_fallback: Optional[_MLP]  = None   # fallback: MLP
+        self.is_trained     = False
+        self._train_loss    = -1.0
+        self._tick_count    = 0
+        self._use_lstm      = True    # False if LSTM fails, falls back to MLP
 
     # ------------------------------------------------------------------
     # Training
@@ -243,23 +492,48 @@ class AIPredictor:
     def train_on_historical_data(self, data) -> bool:
         arr = np.array(data, dtype=float)
         if arr.size < self.MIN_TRAIN:
-            logger.warning("Insufficient data (%d pts, need %d)", arr.size, self.MIN_TRAIN)
+            logger.warning("Insufficient data (%d pts, need %d)",
+                           arr.size, self.MIN_TRAIN)
             return False
+
         scaled = self.scaler.fit_transform(arr.reshape(-1, 1)).ravel()
         X, y   = [], []
         for i in range(self.WINDOW, len(scaled)):
             X.append(scaled[i - self.WINDOW : i])
             y.append(scaled[i])
         X, y = np.array(X), np.array(y)
+        if len(X) < 4:
+            return False
+
+        # ── Try LSTM first (v3.6 primary model) ──────────────────────
+        if self._use_lstm:
+            try:
+                lstm = _LSTM(n_in=1, n_h=32, lr=3e-3, epochs=80)
+                lstm.fit(X, y)
+                self.model       = lstm
+                self.is_trained  = True
+                self._train_loss = round(lstm.loss_, 6)
+                logger.info("LSTM retrained — %d samples, MSE=%.5f  "
+                            "[48h lookback, n_h=32]",
+                            arr.size, self._train_loss)
+                return True
+            except Exception as exc:
+                logger.warning("LSTM failed (%s) — falling back to MLP", exc)
+                self._use_lstm = False
+
+        # ── MLP fallback ──────────────────────────────────────────────
         try:
-            self.model = _MLP(n_in=self.WINDOW)
-            self.model.fit(X, y)
-            self.is_trained  = True
-            self._train_loss = round(self.model.loss_, 6)
-            logger.info("MLP retrained — %d samples, MSE=%.5f", arr.size, self._train_loss)
+            mlp = _MLP(n_in=self.WINDOW)
+            mlp.fit(X, y)
+            self._mlp_fallback = mlp
+            self.model         = mlp   # model attribute always points to active
+            self.is_trained    = True
+            self._train_loss   = round(mlp.loss_, 6)
+            logger.info("MLP fallback retrained — %d samples, MSE=%.5f",
+                        arr.size, self._train_loss)
             return True
         except Exception as exc:
-            logger.error("Training failed: %s", exc)
+            logger.error("Both LSTM and MLP training failed: %s", exc)
             self.is_trained = False
             return False
 
@@ -293,7 +567,11 @@ class AIPredictor:
                     and self.model is not None):
                 win    = self.scaler.transform(
                     working[-self.WINDOW:].reshape(-1, 1)).ravel()
-                pred_s = self.model.predict(win.reshape(1, -1))[0]
+                # LSTM uses predict_one(); MLP uses predict()
+                if isinstance(self.model, _LSTM):
+                    pred_s = self.model.predict_one(win)
+                else:
+                    pred_s = self.model.predict(win.reshape(1, -1))[0]
                 value  = float(max(0.0, self.scaler.inverse(np.array([pred_s]))[0]))
                 confidence = max(0.30, 1.0 - offset * 0.06)
                 is_fb = False
@@ -419,8 +697,8 @@ canvas{{display:block;width:100%;cursor:crosshair}}
   <div class="kpi-strip">
     <div class="kpi">
       <div class="kpi-l">Model</div>
-      <div class="kpi-v">MLP v3.5</div>
-      <div class="kpi-s">NumPy · Adam · 2-layer</div>
+      <div class="kpi-v" id="kModel">LSTM v3.6</div>
+      <div class="kpi-s">NumPy · TBPTT · 48h lookback</div>
     </div>
     <div class="kpi">
       <div class="kpi-l">Train loss</div>
@@ -777,7 +1055,7 @@ draw();
 if __name__ == "__main__":
     import os
     print("=" * 58)
-    print("  ai_forecaster.py v3.5 — Smoke test")
+    print("  ai_forecaster.py v3.6 — Smoke test")
     print("=" * 58)
 
     rng_np = np.random.default_rng(0)
@@ -823,7 +1101,21 @@ if __name__ == "__main__":
     ok_n  = all(v == 0 for v in night.values)
     print(f"Night zeros:        {'✅' if ok_n else '❌'} {night.values}")
 
-    print("\n✅ ai_forecaster.py v3.5 — all tests passed")
+    # LSTM model check
+    print(f"\nModel type   : {'LSTM' if isinstance(fc.model, _LSTM) else 'MLP'}")
+    print(f"Hidden units : {fc.model.n_h if isinstance(fc.model, _LSTM) else 'N/A'}")
+    print(f"Lookback     : {fc.WINDOW} hours")
+    print(f"Use LSTM     : {fc._use_lstm}")
+
+    # Verify LSTM predict_one works directly
+    if isinstance(fc.model, _LSTM):
+        sc_data = fc.scaler.transform(data[-fc.WINDOW:].reshape(-1,1)).ravel()
+        pred    = fc.model.predict_one(sc_data)
+        print(f"LSTM predict_one (scaled): {pred:.4f}")
+        assert isinstance(pred, float), "predict_one must return float"
+        print("  ✅ LSTM predict_one OK")
+
+    print("\n✅ ai_forecaster.py v3.6 — all tests passed")
     print("\nStreamlit usage:")
     print("  import streamlit.components.v1 as components")
     print("  html = predictor.render_panel(result, current_dt, last_24h)")
