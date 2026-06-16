@@ -39,6 +39,7 @@ from scenario_engine import ScenarioEngine, ScenarioParams
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
 from uncertainty_engine import UncertaintyEngine
+from database import Database
 
 
 # =============================================================================
@@ -277,6 +278,18 @@ def init_session() -> None:
     st.session_state.scenario_eng = ScenarioEngine(Config)
     st.session_state.uncertainty  = UncertaintyEngine(Config)   # ← added v4.2
 
+    # Persistent database (v4.3) — writes every tick to luminih2_data.db
+    try:
+        _db = Database()
+        st.session_state.db = _db
+        st.session_state.engine.db = _db   # attach so TickEngine can write
+    except Exception as _db_err:
+        import logging as _lg
+        _lg.getLogger('shared').warning(
+            'Database unavailable — running without persistence: %s', _db_err)
+        st.session_state.db = None
+        st.session_state.engine.db = None
+
     # Result state
     st.session_state.sim_running  = True
     st.session_state.last_state   = None
@@ -321,6 +334,14 @@ def run_tick() -> None:
     st.session_state.history.append(s)
     st.session_state.last_state = s
     st.session_state.last_fc    = fc
+
+    # Persist to SQLite database
+    _db = st.session_state.get('db')
+    if _db is not None:
+        try:
+            _db.write_tick(s)
+        except Exception as _e:
+            pass   # never let DB errors crash the simulation
 
     # Subsystems tick
     sub = st.session_state.subsystems.tick(
