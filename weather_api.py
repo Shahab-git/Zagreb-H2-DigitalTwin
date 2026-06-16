@@ -1,7 +1,7 @@
 # =============================================================================
 # weather_api.py — LUMINIH2 Environmental Data Engine
 # Real-time weather · Zagreb, Croatia · Open-Meteo API
-# Version: 3.3
+# Version: 3.4
 # =============================================================================
 #
 # FEATURES:
@@ -75,10 +75,35 @@ class WeatherPacket:
 
 
 @dataclass
+class ForecastPacket:
+    """
+    24-hour ahead hourly forecast for Zagreb.
+    Returned by WeatherProvider.fetch_forecast_24h().
+    Used by the AI forecaster and EMS for predictive dispatch.
+    """
+    hours:            list   # [0..23] hour-of-day labels
+    irradiance_wm2:   list   # hourly GHI forecast [W/m²]
+    wind_ms:          list   # hourly wind speed [m/s]
+    temp_c:           list   # hourly temperature [°C]
+    precip_mm:        list   # hourly precipitation [mm]
+    peak_irr_wm2:     float  # max irradiance in window
+    peak_irr_hour:    int    # hour of peak irradiance
+    total_energy_kwh: float  # estimated PV energy [kWh] over 24h
+    source:           str    # "live" | "fallback"
+    fetched_at:       str    # HH:MM:SS
+
+
+@dataclass
 class _CacheEntry:
     """Internal cache entry with expiry timestamp."""
     packet:     WeatherPacket
     expires_at: float          # time.monotonic() timestamp
+
+@dataclass
+class _ForecastCacheEntry:
+    """Internal forecast cache entry — refreshed every 30 min."""
+    forecast:   ForecastPacket
+    expires_at: float
 
 
 # =============================================================================
@@ -112,6 +137,7 @@ class WeatherProvider:
         self.days_since_rain: float       = 0.0
         self._cache:          Optional[_CacheEntry]    = None
         self._last_good:      Optional[WeatherPacket]  = None
+        self._forecast_cache: Optional[_ForecastCacheEntry] = None
         self._rng             = np.random.default_rng(int(time.time()) % 10000)
 
     # ------------------------------------------------------------------
@@ -147,6 +173,166 @@ class WeatherProvider:
         self._cache      = _CacheEntry(packet=packet, expires_at=now + self.CACHE_TTL_SEC)
         self._last_good  = packet
         return packet
+
+    # ------------------------------------------------------------------
+    # 24-hour forecast
+    # ------------------------------------------------------------------
+
+    def fetch_forecast_24h(self, force_refresh: bool = False) -> ForecastPacket:
+        """
+        Return a 24-hour hourly forecast for Zagreb from Open-Meteo.
+
+        Cached for 30 minutes — the forecast does not change tick-by-tick.
+        Falls back to a seasonal heuristic if the API is unavailable.
+
+        Used by:
+            - AI forecaster (training input)
+            - EMS predictive dispatch (pre-charge BESS before cloudy window)
+            - Tab 1 skyline panel (24-hour irradiance preview)
+
+        Args:
+            force_refresh : bypass cache and fetch from API
+
+        Returns:
+            ForecastPacket with 24 hourly arrays
+        """
+        FORECAST_TTL = 1800   # 30 minutes
+        now = time.monotonic()
+
+        if (not force_refresh
+                and self._forecast_cache is not None
+                and now < self._forecast_cache.expires_at):
+            fc = self._forecast_cache.forecast
+            return ForecastPacket(**{**fc.__dict__, "source": "cached"})
+
+        forecast = self._fetch_forecast_from_api()
+        if forecast is None:
+            forecast = self._fallback_forecast()
+
+        self._forecast_cache = _ForecastCacheEntry(
+            forecast=forecast,
+            expires_at=now + FORECAST_TTL,
+        )
+        return forecast
+
+    def _fetch_forecast_from_api(self) -> Optional[ForecastPacket]:
+        """
+        Fetch next-24h hourly forecast from Open-Meteo forecast endpoint.
+
+        Open-Meteo provides free hourly forecasts at:
+            https://api.open-meteo.com/v1/forecast
+        No API key required.
+
+        Returns:
+            ForecastPacket or None on failure
+        """
+        params = {
+            "latitude":       self.lat,
+            "longitude":      self.lon,
+            "hourly": [
+                "shortwave_radiation",
+                "wind_speed_10m",
+                "temperature_2m",
+                "precipitation",
+            ],
+            "timezone":       "Europe/Zagreb",
+            "forecast_days":  2,    # today + tomorrow = 48h, we take first 24
+        }
+        try:
+            resp = requests.get(self.BASE_URL, params=params, timeout=10)
+            resp.raise_for_status()
+            data   = resp.json()
+            hourly = data.get("hourly", {})
+
+            now_h  = datetime.now().hour
+
+            def _slice(key: str, default: float) -> list:
+                """Extract next 24 values starting from current hour."""
+                arr = hourly.get(key, [])
+                arr = [float(v or default) for v in arr]
+                # Pad to at least 48 values
+                arr = arr + [default] * 48
+                return arr[now_h: now_h + 24]
+
+            irr   = _slice("shortwave_radiation", 0.0)
+            wind  = _slice("wind_speed_10m", 4.5)
+            temp  = _slice("temperature_2m", 15.0)
+            precip = _slice("precipitation", 0.0)
+
+            hours = [(now_h + i) % 24 for i in range(24)]
+
+            # PV energy estimate (rough: capacity × irr × system_eff)
+            sys_eff = 0.97 * 0.995   # inverter × MPPT
+            total_e = sum(
+                irr_h * Config.PV_SYSTEM_CAPACITY_KW / 1000.0 * sys_eff
+                for irr_h in irr
+            )
+
+            peak_irr  = max(irr) if irr else 0.0
+            peak_hour = hours[irr.index(peak_irr)] if irr else now_h
+
+            pkt = ForecastPacket(
+                hours=hours,
+                irradiance_wm2=irr,
+                wind_ms=wind,
+                temp_c=temp,
+                precip_mm=precip,
+                peak_irr_wm2=round(peak_irr, 1),
+                peak_irr_hour=peak_hour,
+                total_energy_kwh=round(total_e, 2),
+                source="live",
+                fetched_at=datetime.now().strftime("%H:%M:%S"),
+            )
+            logger.info(
+                "Forecast: peak %.0f W/m² at %02d:00 · est. %.1f kWh PV today",
+                peak_irr, peak_hour, total_e,
+            )
+            return pkt
+
+        except requests.exceptions.Timeout:
+            logger.warning("Forecast API timeout — using fallback")
+        except requests.exceptions.ConnectionError:
+            logger.warning("No network for forecast — using fallback")
+        except Exception as exc:
+            logger.error("Forecast API error: %s", exc)
+        return None
+
+    def _fallback_forecast(self) -> ForecastPacket:
+        """
+        Generate a seasonal climatology forecast when API is unavailable.
+        Uses Zagreb PVGIS data — same source as the current-conditions fallback.
+        """
+        month  = datetime.now().month
+        now_h  = datetime.now().hour
+        hours  = [(now_h + i) % 24 for i in range(24)]
+        wind_v = self._seasonal_wind(month)
+        temp_v = self._seasonal_temp(month)
+
+        irr   = [self._seasonal_irradiance(month, h) for h in hours]
+        wind  = [wind_v] * 24
+        temp  = [temp_v] * 24
+        precip = [0.0] * 24
+
+        sys_eff = 0.97 * 0.995
+        total_e = sum(
+            irr_h * Config.PV_SYSTEM_CAPACITY_KW / 1000.0 * sys_eff
+            for irr_h in irr
+        )
+        peak_irr  = max(irr) if irr else 0.0
+        peak_hour = hours[irr.index(peak_irr)] if irr else now_h
+
+        return ForecastPacket(
+            hours=hours,
+            irradiance_wm2=irr,
+            wind_ms=wind,
+            temp_c=temp,
+            precip_mm=precip,
+            peak_irr_wm2=round(peak_irr, 1),
+            peak_irr_hour=peak_hour,
+            total_energy_kwh=round(total_e, 2),
+            source="fallback",
+            fetched_at=datetime.now().strftime("%H:%M:%S"),
+        )
 
     # ------------------------------------------------------------------
     # API fetch
@@ -361,7 +547,7 @@ class WeatherProvider:
 
 if __name__ == "__main__":
     print("=" * 55)
-    print("  weather_api.py v3.3 — Smoke test")
+    print("  weather_api.py v3.4 — Smoke test")
     print("=" * 55)
 
     provider = WeatherProvider()
@@ -411,4 +597,24 @@ if __name__ == "__main__":
     assert pkt4.soiling_factor < 1.0, "Soiling should reduce factor"
     print(f"  Soiling after 5 dry days: {pkt4.soiling_factor:.4f} ✅")
 
-    print("\n✅ weather_api.py v3.3 — all tests passed")
+    # 24-hour forecast test
+    print("\n[5] 24-hour forecast test")
+    fc = provider.fetch_forecast_24h()
+    print(f"  Source        : {fc.source}")
+    print(f"  Fetched at    : {fc.fetched_at}")
+    print(f"  Hours[0..3]   : {fc.hours[:4]}")
+    print(f"  Irr[0..3]     : {[round(v,1) for v in fc.irradiance_wm2[:4]]}")
+    print(f"  Wind[0..3]    : {[round(v,2) for v in fc.wind_ms[:4]]}")
+    print(f"  Peak irr      : {fc.peak_irr_wm2} W/m² at {fc.peak_irr_hour:02d}:00")
+    print(f"  PV energy est : {fc.total_energy_kwh} kWh")
+    assert len(fc.hours) == 24
+    assert len(fc.irradiance_wm2) == 24
+    assert fc.peak_irr_wm2 >= 0
+    print("  ✅ ForecastPacket valid")
+
+    # Cache test — should return cached within 30 min
+    fc2 = provider.fetch_forecast_24h()
+    assert fc2.source in ("cached", "live")
+    print(f"  Second call source: {fc2.source}  ✅")
+
+    print("\n✅ weather_api.py v3.4 — all tests passed")
