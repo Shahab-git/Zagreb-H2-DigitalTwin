@@ -1,7 +1,7 @@
 # =============================================================================
 # core_engine.py — LUMINIH2 Core Simulation Engine
 # Tick Engine · LCOH Accumulator · State Management · Alert System
-# Version: 4.1
+# Version: 4.2
 # =============================================================================
 #
 # KEY COMPONENTS:
@@ -248,6 +248,12 @@ class TickState:
     subsidy_eur:        float = 0.0
     grid_rev_eur:       float = 0.0
 
+    # ── Forecast-aware EMS (v4.2) ─────────────────────────────────────
+    ems_strategy:       str   = "normal"   # forecast EMS strategy label
+    ems_elec_setpoint:  float = 0.0        # forecast-suggested setpoint [kW]
+    ems_bess_target:    float = 0.55       # forecast-suggested BESS SoC
+    next_6h_pv_kwh:     float = 0.0        # predicted PV energy next 6 h [kWh]
+
     # ── Weather ───────────────────────────────────────────────────────
     wx_temp_c:          float = 15.0
     wx_humidity:        float = 60.0      # % relative humidity
@@ -280,6 +286,7 @@ class TickEngine:
         1. Fetch weather (real API or manual override)
         2. Calculate solar + wind generation
         3. AI forecast (retrain every 20 ticks)
+        3b. Forecast-aware EMS overlay (v4.2)
         4. EMS power dispatch (electrolyzer-first priority)
         5. BESS update
         6. Electrolyzer production
@@ -376,6 +383,12 @@ class TickEngine:
             wx_src     = pkt.source
             wx_hist    = pkt.history_irradiance_24h
 
+        # ── 1b. 24-h forecast (cached 30 min) ─────────────────────────
+        try:
+            wx_forecast = self.wx.fetch_forecast_24h()
+        except Exception:
+            wx_forecast = None
+
         # ── 2. Generation ──────────────────────────────────────────────
         solar_r   = self.solar.get_power_output(wx_irr, wx_temp, wx_soiling)
         wind_r    = self.wind.get_power_output(wx_wind, wx_turb)
@@ -386,6 +399,18 @@ class TickEngine:
             train_data = wx_hist * 3 if len(wx_hist) < 48 else wx_hist
             self.ai.train_on_historical_data(train_data)
         forecast = self.ai.predict_future(wx_hist, horizon_hours=6, current_dt=now)
+
+        # ── 3b. Forecast-aware EMS overlay ──────────────────────────────
+        fc_decision = None
+        if wx_forecast is not None:
+            try:
+                fc_decision = self.ems.forecast_aware_dispatch(
+                    wx_forecast,
+                    current_soc=self.bess.soc,
+                    current_gen_kw=total_gen,
+                )
+            except Exception:
+                fc_decision = None
 
         # ── 4. EMS Power Dispatch (electrolyzer-first) ─────────────────
         src_dec  = self.ems.decide_energy_source(
@@ -503,6 +528,11 @@ class TickEngine:
             ev_kw=flow.power_to_ev_kw,
             grid_export_kw=flow.grid_export_kw,
             grid_import_kw=flow.grid_import_kw,
+            # Forecast EMS
+            ems_strategy=(fc_decision.strategy if fc_decision else "normal"),
+            ems_elec_setpoint=(fc_decision.elec_setpoint_kw if fc_decision else 0.0),
+            ems_bess_target=(fc_decision.bess_target_soc if fc_decision else 0.55),
+            next_6h_pv_kwh=(fc_decision.next_6h_pv_kwh if fc_decision else 0.0),
             # Electrolyzer
             h2_kg_h=round(elec_r.h2_kg_h, 5),
             elec_eff_pct=round(elec_r.efficiency * 100, 2),
@@ -610,7 +640,7 @@ class HistoryBuffer:
 
 if __name__ == "__main__":
     print("=" * 55)
-    print("  core_engine.py v4.1 — Smoke test")
+    print("  core_engine.py v4.2 — Smoke test")
     print("=" * 55)
 
     # ── LCOHAccumulator ───────────────────────────────────────────────
@@ -663,4 +693,4 @@ if __name__ == "__main__":
     last = buf.last()
     print(f"  Last solar_kw    : {last['solar_kw']}")
 
-    print("\n✅ core_engine.py v4.1 — all tests passed")
+    print("\n✅ core_engine.py v4.2 — all tests passed")
