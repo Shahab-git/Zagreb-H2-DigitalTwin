@@ -325,6 +325,7 @@ class TickEngine:
         self.cum_revenue_eur: float = 0.0
         self.cum_water_l:     float = 0.0
         self.tick_count:      int   = 0
+        self.db               = None   # set by shared.py to Database instance
 
     def run(
         self,
