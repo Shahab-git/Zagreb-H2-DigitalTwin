@@ -22,6 +22,7 @@ from scenario_engine import ScenarioEngine, ScenarioParams
 from subsystems import SubsystemManager
 from optimizer import EconomicOptimizer
 from uncertainty_engine import UncertaintyEngine
+from database import Database
 
 # =============================================================================
 # PAGE CONFIG — must be first Streamlit call
@@ -255,6 +256,16 @@ def _init():
     st.session_state.opt_result    = None
     st.session_state.sub_result    = None
     st.session_state.unc_report    = None
+    st.session_state.voice_enabled     = True
+    st.session_state.voice_alert_spoken = set()
+    try:
+        _db = Database()
+        st.session_state.db = _db
+        st.session_state.engine.db = _db
+    except Exception as _dbe:
+        import logging as _lg; _lg.getLogger("main").warning("DB: %s",_dbe)
+        st.session_state.db = None
+        st.session_state.engine.db = None
 _init()
 
 # =============================================================================
@@ -491,6 +502,10 @@ if st.session_state.sim_running:
     st.session_state.history.append(s)
     st.session_state.last_state = s
     st.session_state.last_fc    = fc_res
+    _dbw = st.session_state.get("db")
+    if _dbw:
+        try: _dbw.write_tick(s)
+        except Exception: pass
     sub = st.session_state.subsystems.tick(
         h2_kg_h=s.h2_kg_h, elec_power_kw=s.elec_kw,
         ambient_temp_c=s.wx_temp_c, timestep_sec=Config.TIMESTEP_SEC)
@@ -852,6 +867,18 @@ with tabs[0]:
         wc2[0].metric("Irradiance", f"{s.wx_irradiance:.0f} W/m²")
         wc2[1].metric("Soiling",    f"{s.wx_soiling:.3f}")
         wc2[2].metric("Precip",     f"{s.wx_precip_mm:.1f} mm")
+
+    # ── Forecast-aware EMS status ──────────────────────────────────────
+    _fc_strat = getattr(s, "ems_strategy", "")
+    _fc_pv    = getattr(s, "next_6h_pv_kwh", 0.0)
+    _fc_sp    = getattr(s, "ems_elec_setpoint", 0.0)
+    if _fc_strat and _fc_strat not in ("normal", "standby", ""):
+        st.markdown(
+            f'<div class="alert-info" style="margin:4px 0 8px">🔮 '
+            f'<b>Forecast EMS:</b> {_fc_strat} · '
+            f'6h PV: {_fc_pv:.1f} kWh · '
+            f'Recommended: {_fc_sp:.2f} kW</div>',
+            unsafe_allow_html=True)
 
     # ── Row 2: AI forecast panel FULL WIDTH ────────────────────────────
     st.markdown('<p class="sec-hdr">AI solar forecast — Zagreb skyline panel</p>',
@@ -3424,7 +3451,7 @@ svg{width:100%;height:auto;display:block}
 
 <rect x="576" y="742" width="164" height="80" rx="6" fill="#ddd6fe" stroke="#7c3aed" stroke-width="1"/>
 <text x="658" y="758" text-anchor="middle" font-size="10" font-weight="700" fill="#3b0764">AI forecasting</text>
-<text x="658" y="772" text-anchor="middle" font-size="9"  fill="#5b21b6">MLP solar forecast</text>
+<text x="658" y="772" text-anchor="middle" font-size="9"  fill="#5b21b6">LSTM v3.6 · 48h lookback</text>
 <text x="658" y="784" text-anchor="middle" font-size="9"  fill="#5b21b6">maybe_retrain() 20 ticks</text>
 <text x="658" y="796" text-anchor="middle" font-size="9"  fill="#5b21b6">P10/P50/P90 bands</text>
 <text x="658" y="808" text-anchor="middle" font-size="9"  fill="#5b21b6">Scale-up projections</text>
