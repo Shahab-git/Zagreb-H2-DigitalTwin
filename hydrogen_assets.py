@@ -59,6 +59,14 @@ class StorageChainResult:
     buffer_fill_pct:        float   # 0–100
     main_fill_pct:          float   # 0–100
     hrs_fill_pct:           float   # 0–100
+    # Dispensing event fields
+    dispensing_active:      bool    = False
+    dispensed_kg_this_tick: float   = 0.0
+    cum_dispensed_kg:       float   = 0.0
+    vehicles_served:        int     = 0
+    dispensing_revenue_eur: float   = 0.0
+    hrs_pressure_bar:       float   = 350.0
+    next_dispense_hour:     int     = 8
 
 
 @dataclass
@@ -233,6 +241,12 @@ class HydrogenStorageChain:
         # All flow rates from config (not hardcoded)
         self._comp_flow_kg_h  = Config.compressor.flow_max_kg_h  # 0.08333 kg/h = 2 kg/day
         self._hrs_fill_kg_h   = Config.hrs.fill_rate_kg_h        # 1.5 kg/h
+        # Dispensing state (SAE J2601 FCEV model)
+        self._cum_dispensed_kg:   float = 0.0
+        self._vehicles_served:    int   = 0
+        self._dispensing_revenue: float = 0.0
+        self._dispensing_active:  bool  = False
+        self._last_dispense_hour: int   = -1
 
     def manage_chain(
         self,
@@ -322,7 +336,7 @@ class HydrogenStorageChain:
         if self._expected_main_kg > cfg.MAIN_TANK_CAPACITY_KG * 2:
             self._expected_main_kg = self.main_tank_kg
 
-        # ── 6. HRS priority dispatching ───────────────────────────────
+        # ── 6. HRS fill from main tank ────────────────────────────────
         main_soc = self.main_tank_kg / max(cfg.MAIN_TANK_CAPACITY_KG, 1e-9)
         if (main_soc >= cfg.MAIN_TANK_START_THRESHOLD
                 and self.hrs_kg < cfg.HRS_H2_TANK_CAPACITY_KG):
@@ -335,7 +349,32 @@ class HydrogenStorageChain:
             self.main_tank_kg -= dispatch_kg
             self.hrs_kg       += dispatch_kg
 
-        return StorageChainResult(
+        # ── 7. Vehicle dispensing event (SAE J2601) ───────────────────
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _tdd
+        _now_h       = _dt.now(_tz(_tdd(hours=2))).hour
+        _disp_hours  = tuple(getattr(cfg.hrs, 'dispense_hours', (8,)))
+        _kg_fill     = float(getattr(cfg.hrs, 'dispense_kg_per_fill', 5.0))
+        _h2_price    = float(getattr(cfg.hrs, 'h2_price_eur_kg', 6.0))
+        _disp_pres   = float(getattr(cfg.hrs, 'dispensing_pressure_bar', 350.0))
+
+        # Trigger once per scheduled hour; guard prevents repeat within same hour
+        if (_now_h in _disp_hours
+                and _now_h != self._last_dispense_hour
+                and self.hrs_kg >= _kg_fill):
+            self.hrs_kg               = max(0.0, self.hrs_kg - _kg_fill)
+            self._cum_dispensed_kg   += _kg_fill
+            self._vehicles_served    += 1
+            self._dispensing_revenue += _kg_fill * _h2_price
+            self._last_dispense_hour  = _now_h
+            self._dispensing_active   = True
+        else:
+            self._dispensing_active   = False
+
+        # Next scheduled dispensing hour
+        _future = sorted(h for h in _disp_hours if h > _now_h)
+        _next_h = _future[0] if _future else sorted(_disp_hours)[0]
+
+        _result = StorageChainResult(
             buffer_kg=round(self.buffer_kg, 5),
             main_tank_kg=round(self.main_tank_kg, 5),
             hrs_kg=round(self.hrs_kg, 5),
@@ -350,7 +389,16 @@ class HydrogenStorageChain:
                 (self.main_tank_kg / max(cfg.MAIN_TANK_CAPACITY_KG, 1e-9)) * 100, 1),
             hrs_fill_pct=round(
                 (self.hrs_kg / max(cfg.HRS_H2_TANK_CAPACITY_KG, 1e-9)) * 100, 1),
+            dispensing_active=self._dispensing_active,
+            dispensed_kg_this_tick=round(_kg_fill if self._dispensing_active else 0.0, 4),
+            cum_dispensed_kg=round(self._cum_dispensed_kg, 4),
+            vehicles_served=self._vehicles_served,
+            dispensing_revenue_eur=round(self._dispensing_revenue, 4),
+            hrs_pressure_bar=_disp_pres,
+            next_dispense_hour=_next_h,
         )
+        self._last_result = _result
+        return _result
 
 
 # =============================================================================
