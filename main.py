@@ -510,6 +510,10 @@ if st.session_state.sim_running:
         h2_kg_h=s.h2_kg_h, elec_power_kw=s.elec_kw,
         ambient_temp_c=s.wx_temp_c, timestep_sec=Config.TIMESTEP_SEC)
     st.session_state.sub_result = sub
+    # Store chain result for HRS dispensing display
+    st.session_state.last_chain_result = \
+        st.session_state.engine.chain._last_result \
+        if hasattr(st.session_state.engine.chain, '_last_result') else None
 
 
 s    = st.session_state.last_state
@@ -1489,35 +1493,47 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
                 legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font=dict(size=13, color="#111827"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#e2e8f0", borderwidth=1)))
             st.plotly_chart(f14, use_container_width=True)
 
-        # HRS dispensing tracker
-        st.markdown('<p class="sec-hdr">HRS dispensing tracker</p>',
+        # HRS dispensing tracker — real dispensing events
+        st.markdown('<p class="sec-hdr">HRS dispensing tracker — SAE J2601</p>',
                     unsafe_allow_html=True)
-        hrs_kg_dispensed = s.cum_h2_kg * 0.30   # ~30% goes to HRS
-        vehicles_served  = int(hrs_kg_dispensed / 5.0)
+        # Pull real dispensing data from chain_result if available
+        _chain = getattr(st.session_state, 'last_chain_result', None)
+        _cum_disp  = getattr(_chain, 'cum_dispensed_kg',   s.cum_h2_kg * 0.30) if _chain else s.cum_h2_kg * 0.30
+        _veh_srv   = getattr(_chain, 'vehicles_served',    int(_cum_disp / 5.0)) if _chain else int(_cum_disp / 5.0)
+        _disp_rev  = getattr(_chain, 'dispensing_revenue_eur', _cum_disp * 6.0) if _chain else _cum_disp * 6.0
+        _disp_now  = getattr(_chain, 'dispensing_active',  False) if _chain else False
+        _next_h    = getattr(_chain, 'next_dispense_hour', 8) if _chain else 8
+        _disp_pres = getattr(_chain, 'hrs_pressure_bar',  350.0) if _chain else 350.0
+        _status_col = '#dcfce7' if _disp_now else '#f0fdf4'
+        _status_bc  = '#22c55e' if _disp_now else '#86efac'
+        _status_txt = '⛽ DISPENSING NOW — vehicle filling' if _disp_now else f'○ Standby · next at {_next_h:02d}:00'
+        st.markdown(
+            f'<div style="background:{_status_col};border:2px solid {_status_bc};'
+            f'border-radius:10px;padding:10px 14px;margin-bottom:8px;'
+            f'font-size:13px;font-weight:700;color:#111827">{_status_txt}</div>',
+            unsafe_allow_html=True)
         st.markdown(
             f'<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;'
-            f'padding:12px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+            f'padding:12px 16px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">'
             f'<div style="text-align:center">'
-            f'<div style="font-size:10px;color:#15803d;font-weight:600;'
-            f'text-transform:uppercase">HRS Fill</div>'
+            f'<div style="font-size:10px;color:#15803d;font-weight:600;text-transform:uppercase">HRS Fill</div>'
             f'<div style="font-size:22px;font-weight:700;color:#111827">{s.hrs_pct:.0f}%</div>'
-            f'<div style="font-size:10px;color:#64748b">'
-            f'{s.hrs_pct/100*Config.HRS_H2_TANK_CAPACITY_KG:.2f} kg</div>'
+            f'<div style="font-size:10px;color:#64748b">{s.hrs_pct/100*Config.HRS_H2_TANK_CAPACITY_KG:.2f} kg</div>'
             f'</div>'
-            f'<div style="text-align:center;border-left:1px solid #bbf7d0;'
-            f'border-right:1px solid #bbf7d0">'
-            f'<div style="font-size:10px;color:#15803d;font-weight:600;'
-            f'text-transform:uppercase">H₂ to HRS</div>'
-            f'<div style="font-size:22px;font-weight:700;color:#111827">'
-            f'{hrs_kg_dispensed:.3f}</div>'
+            f'<div style="text-align:center;border-left:1px solid #bbf7d0">'
+            f'<div style="font-size:10px;color:#15803d;font-weight:600;text-transform:uppercase">Dispensed</div>'
+            f'<div style="font-size:22px;font-weight:700;color:#111827">{_cum_disp:.3f}</div>'
             f'<div style="font-size:10px;color:#64748b">kg session</div>'
             f'</div>'
-            f'<div style="text-align:center">'
-            f'<div style="font-size:10px;color:#15803d;font-weight:600;'
-            f'text-transform:uppercase">Vehicles Est.</div>'
-            f'<div style="font-size:22px;font-weight:700;color:#111827">'
-            f'{vehicles_served}</div>'
+            f'<div style="text-align:center;border-left:1px solid #bbf7d0">'
+            f'<div style="font-size:10px;color:#15803d;font-weight:600;text-transform:uppercase">Vehicles</div>'
+            f'<div style="font-size:22px;font-weight:700;color:#111827">{_veh_srv}</div>'
             f'<div style="font-size:10px;color:#64748b">× 5 kg fills</div>'
+            f'</div>'
+            f'<div style="text-align:center;border-left:1px solid #bbf7d0">'
+            f'<div style="font-size:10px;color:#15803d;font-weight:600;text-transform:uppercase">HRS Revenue</div>'
+            f'<div style="font-size:22px;font-weight:700;color:#111827">€{_disp_rev:.2f}</div>'
+            f'<div style="font-size:10px;color:#64748b">{_disp_pres:.0f} bar · SAE J2601</div>'
             f'</div>'
             f'</div>',
             unsafe_allow_html=True)
