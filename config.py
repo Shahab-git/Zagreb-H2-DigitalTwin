@@ -53,14 +53,14 @@ class SolarPV:
         datasheet_ref="customer_datasheet_pv"
     ))
     # Panel electrical (STC: 1000 W/m², 25°C, AM1.5)
-    panel_count:         int   = 32
+    panel_count:         int   = 42
     rated_power_wp:      float = 360.0       # W per panel ±5W
     voc_v:               float = 47.0        # V open-circuit
     vmp_v:               float = 39.6        # V at MPP
     isc_a:               float = 9.67        # A short-circuit
     imp_a:               float = 9.10        # A at MPP
     # System
-    total_capacity_kw:   float = 15.0        # Customer spec: ≈ 15.12 kW
+    total_capacity_kw:   float = 15.0        # Customer spec: 15 kW (42 × 360W ≈ 15.12 kW)
     temp_coeff_pct_c:    float = -0.0035     # -0.35%/°C (mono, typical)
     noct_c:              float = 45.0        # Nominal Operating Cell Temp
     # Inverter (ideal values as specified)
@@ -315,10 +315,27 @@ class FuelCell:
 # =============================================================================
 @dataclass(frozen=True)
 class HRS:
-    """Hydrogen Refuelling Station — sized for daily vehicle refuelling"""
-    tank_capacity_kg:    float = 5.0         # Daily demand buffer
-    fill_rate_kg_h:      float = 1.5
-    min_dispatch_pct:    float = 0.20        # Dispatch above 20% fill
+    """
+    Hydrogen Refuelling Station — SAE J2601 FCEV dispensing model.
+
+    The HRS tank (5 kg) fills from the main storage tank and is
+    drained by simulated vehicle dispensing events on a daily schedule.
+
+    Dispensing schedule: fills_per_day vehicles at evenly spaced hours.
+    Each fill drains dispense_kg_per_fill kg from the HRS tank.
+    Dispensing only proceeds if hrs_kg >= dispense_kg_per_fill.
+
+    SAE J2601 Type III (350 bar) or Type IV (700 bar) — modelled as
+    a fixed-pressure setpoint for revenue calculation.
+    """
+    tank_capacity_kg:      float = 5.0      # HRS buffer tank [kg]
+    fill_rate_kg_h:        float = 1.5      # Fill rate from main tank [kg/h]
+    min_dispatch_pct:      float = 0.20     # Min fill before dispatching to HRS
+    dispense_kg_per_fill:  float = 5.0      # H₂ per FCEV fill (Toyota Mirai) [kg]
+    fills_per_day:         int   = 1        # Vehicle arrivals per day
+    dispensing_pressure_bar: float = 350.0  # SAE J2601 Type III [bar]
+    dispense_hours:        tuple = (8,)     # Hours of day vehicles arrive (24h)
+    h2_price_eur_kg:       float = 6.0      # HRS sell price [€/kg]
 
 
 # =============================================================================
