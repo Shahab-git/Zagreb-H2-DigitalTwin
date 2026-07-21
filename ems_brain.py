@@ -28,10 +28,62 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Callable
 
 from config import Config
+
+
+# =============================================================================
+# Categorical dispatch states — Enum, not string Literal unions.
+#
+# All str-backed, so every place that already treats these values as plain
+# strings — `.split()`, `in`, equality against a literal — keeps working
+# unchanged. Only the type hints and equality/membership checks become
+# safer (no risk of a typo'd string silently matching nothing).
+# =============================================================================
+
+class _StrValueEnum(str, Enum):
+    """str-backed Enum whose str()/f-string formatting shows the plain
+    value (e.g. "Hybrid (PV+Wind)") rather than Python's default
+    "ClassName.MEMBER" — needed because stock (str, Enum) mixins changed
+    their default str()/format() to the qualified name in Python 3.12+.
+    Explicit override keeps this correct across the requirements.txt
+    target of Python >= 3.10 without depending on enum.StrEnum (3.11+)."""
+    def __str__(self) -> str:
+        return str(self.value)
+
+    def __format__(self, format_spec: str) -> str:
+        return format(str(self.value), format_spec)
+
+
+class EnergySource(_StrValueEnum):
+    """Dominant energy source selected for the tick."""
+    SOLAR  = "Solar (PV)"
+    WIND   = "Wind Turbine"
+    HYBRID = "Hybrid (PV+Wind)"
+    GRID   = "National Grid"
+
+
+class ElectrolyzerMode(_StrValueEnum):
+    """Electrolyzer operating band, classified from power delivered."""
+    OFF      = "off"
+    PARTIAL  = "partial"
+    NOMINAL  = "nominal"
+    OVERLOAD = "overload"
+
+
+class CompressorStatus(_StrValueEnum):
+    ON  = "ON"
+    OFF = "OFF"
+
+
+class DispatchTarget(_StrValueEnum):
+    """Where produced/stored H₂ is routed next."""
+    STORAGE   = "Storage"
+    HRS       = "Refueling Station (HRS)"
+    FUEL_CELL = "Fuel Cell (FC)"
 
 
 # =============================================================================
@@ -41,7 +93,7 @@ from config import Config
 @dataclass
 class SourceDecision:
     """Result of energy source selection."""
-    source:       Literal["Solar (PV)", "Wind Turbine", "Hybrid (PV+Wind)", "National Grid"]
+    source:       EnergySource
     available_kw: float
     reason:       str
 
@@ -55,14 +107,14 @@ class PowerFlowResult:
     grid_export_kw:           float    # Priority 5
     grid_import_kw:           float    # Priority 6
     switching_event:          str      # Human-readable dispatch log
-    electrolyzer_mode:        str      # "nominal" | "overload" | "partial" | "off"
+    electrolyzer_mode:        ElectrolyzerMode
 
 
 @dataclass
 class H2LogisticsResult:
     """Result of H₂ logistics control."""
-    compressor_status:  Literal["ON", "OFF"]
-    dispatch_target:    Literal["Storage", "Refueling Station (HRS)", "Fuel Cell (FC)"]
+    compressor_status:  CompressorStatus
+    dispatch_target:    DispatchTarget
     buffer_fill_pct:    float
     main_tank_fill_pct: float
 
@@ -119,6 +171,57 @@ class ForecastDecision:
 
 
 # =============================================================================
+# Dispatch pipeline — configurable priority-ordered strategy
+#
+# manage_power_flow() no longer hardcodes its 6 priorities as a fixed
+# sequence of calls. Instead each priority is a "step" — a method with the
+# uniform signature (ctx: DispatchContext) -> None — that reads/claims
+# power from the shared context and appends its own log line. The order
+# they run in is just a plain list, EMSBrain.dispatch_pipeline, built in
+# __init__(). That means the electrolyzer-first strategy can be
+# reordered, extended, or replaced (pass a custom `dispatch_pipeline` to
+# the constructor, or mutate `ems.dispatch_pipeline` directly / subclass
+# and override individual `_step_*` methods) without touching
+# manage_power_flow() or any other step's implementation.
+# =============================================================================
+
+@dataclass
+class DispatchContext:
+    """
+    Mutable working state threaded through one manage_power_flow() call.
+
+    Each pipeline step reads and writes this object in place — claiming
+    its share of `remaining`, recording its allocation in the matching
+    `p_*` field, and appending a human-readable note to `events`. The
+    priority order in EMSBrain.dispatch_pipeline determines the sequence
+    steps run in, which is what makes later steps see the power already
+    claimed by earlier ones (e.g. BESS charging only sees what the
+    electrolyzer didn't take).
+    """
+    # Inputs for this tick (read-only through the pipeline)
+    remaining:                 float           # power still unallocated [kW]
+    current_soc:                float           # BESS SoC [0-1]
+    ev_demand_kw:               float = 0.0
+    timestep_sec:               int   = 10
+    bess_soc_ceiling:           float | None = None
+    defer_electrolyzer_start:   bool  = False
+
+    # Allocations — each step claims its own share
+    p_elec:   float = 0.0
+    p_bess:   float = 0.0
+    p_ev:     float = 0.0
+    p_export: float = 0.0
+    p_import: float = 0.0
+
+    events: list[str] = field(default_factory=list)
+
+
+# A pipeline step is a bound method (or any equivalent callable) taking
+# just the shared context — `self` is already captured by binding.
+DispatchStep = Callable[[DispatchContext], None]
+
+
+# =============================================================================
 # EMS Brain v4.4
 # =============================================================================
 
@@ -133,6 +236,9 @@ class EMSBrain:
     Architecture:
         Phase 1 : Source selection  (which energy source is dominant?)
         Phase 2 : Power dispatch    (how is power allocated this tick?)
+                  — a configurable pipeline of priority steps
+                  (self.dispatch_pipeline), electrolyzer-first by default.
+                  See DispatchContext / DispatchStep above.
         Phase 3 : H₂ logistics      (compressor + dispatch target)
         Phase 4 : Economics         (per-tick cost + revenue)
         Phase 5 : Downstream        (FC → EV + grid)
@@ -145,7 +251,7 @@ class EMSBrain:
     # Minimum surplus above nominal before pushing to peak
     PEAK_SURPLUS_THRESHOLD_KW: float = 1.0
 
-    def __init__(self) -> None:
+    def __init__(self, dispatch_pipeline: list[DispatchStep] | None = None) -> None:
         self._cfg = Config
         self._ps  = Config.power_switching
 
@@ -157,6 +263,19 @@ class EMSBrain:
         # Compressor state
         self._comp_runtime_sec:  int   = 0
         self._comp_on:           bool  = False
+
+        # Priority-ordered dispatch pipeline — electrolyzer-first by
+        # default (see module PRIORITY ORDER comment at the top of this
+        # file). Pass a custom list to change strategy without editing
+        # manage_power_flow() or any step's implementation.
+        self.dispatch_pipeline: list[DispatchStep] = dispatch_pipeline or [
+            self._step_electrolyzer_nominal,
+            self._step_bess_charge,
+            self._step_electrolyzer_overload,
+            self._step_ev,
+            self._step_grid_export,
+            self._step_grid_import,
+        ]
 
     # ------------------------------------------------------------------
     # Phase 1 — Source selection
@@ -190,25 +309,25 @@ class EMSBrain:
 
         if pv_available_kw >= p_min and wind_available_kw >= p_min:
             return SourceDecision(
-                source="Hybrid (PV+Wind)",
+                source=EnergySource.HYBRID,
                 available_kw=combined,
                 reason=(f"Both PV ({pv_available_kw:.1f} kW) + "
                         f"Wind ({wind_available_kw:.1f} kW) ≥ min {p_min} kW"),
             )
         if pv_available_kw >= p_min:
             return SourceDecision(
-                source="Solar (PV)",
+                source=EnergySource.SOLAR,
                 available_kw=pv_available_kw,
                 reason=f"PV {pv_available_kw:.1f} kW ≥ min {p_min} kW",
             )
         if wind_available_kw >= p_min:
             return SourceDecision(
-                source="Wind Turbine",
+                source=EnergySource.WIND,
                 available_kw=wind_available_kw,
                 reason=f"Wind {wind_available_kw:.1f} kW ≥ min {p_min} kW",
             )
         return SourceDecision(
-            source="National Grid",
+            source=EnergySource.GRID,
             available_kw=p_min,
             reason="Renewables insufficient — grid fallback",
         )
@@ -223,6 +342,8 @@ class EMSBrain:
         current_soc:       float,
         ev_demand_kw:      float = 0.0,
         timestep_sec:      int   = 10,
+        bess_soc_ceiling:      float | None = None,
+        defer_electrolyzer_start: bool      = False,
     ) -> PowerFlowResult:
         """
         Dispatch incoming generation using electrolyzer-first priority order.
@@ -239,107 +360,182 @@ class EMSBrain:
             current_soc       : BESS state of charge [0–1]
             ev_demand_kw      : EV charger load request [kW]
             timestep_sec      : simulation timestep [s]
+            bess_soc_ceiling  : forecast-recommended charge ceiling [0-1],
+                                 e.g. forecast_aware_dispatch()'s
+                                 bess_target_soc. When lower than
+                                 BATT_SOC_MAX (a predicted solar peak is
+                                 coming and headroom should be kept free),
+                                 caps how far priority 2 charges the BESS
+                                 this tick. None = no forecast guidance,
+                                 behaves exactly as before (charges to
+                                 BATT_SOC_MAX).
+            defer_electrolyzer_start : True = forecast says a strong peak
+                                 is only 1-3h away — skip starting a fresh
+                                 electrolyzer cold-start cycle this tick.
+                                 Never interrupts a unit already running
+                                 under the min-runtime guard (must_keep
+                                 below still takes priority).
 
         Returns:
             PowerFlowResult with all power allocations and EMS log
         """
-        cfg       = self._cfg
-        ps        = self._ps
-        remaining = incoming_power_kw
-        events:   list[str] = []
+        ctx = DispatchContext(
+            remaining=incoming_power_kw,
+            current_soc=current_soc,
+            ev_demand_kw=ev_demand_kw,
+            timestep_sec=timestep_sec,
+            bess_soc_ceiling=bess_soc_ceiling,
+            defer_electrolyzer_start=defer_electrolyzer_start,
+        )
 
-        # ── PRIORITY 1: Electrolyzer at nominal load ───────────────────
-        p_elec = 0.0
-        can_start  = remaining >= cfg.ELEC_P_MIN_KW
-        must_keep  = (self._elec_is_running
-                      and self._elec_runtime_sec < self.ELEC_MIN_RUNTIME_SEC)
+        for step in self.dispatch_pipeline:
+            step(ctx)
+
+        return PowerFlowResult(
+            power_to_electrolyzer_kw=round(ctx.p_elec, 3),
+            power_to_battery_kw=round(ctx.p_bess, 3),
+            power_to_ev_kw=round(ctx.p_ev, 3),
+            grid_export_kw=round(ctx.p_export, 3),
+            grid_import_kw=round(ctx.p_import, 3),
+            switching_event=" | ".join(ctx.events) if ctx.events else "Standby",
+            electrolyzer_mode=self._classify_electrolyzer_mode(ctx.p_elec, self._cfg),
+        )
+
+    # ------------------------------------------------------------------
+    # Pipeline steps — each has the uniform signature (ctx) -> None and
+    # reads/claims power from the shared DispatchContext. The ORDER they
+    # run in lives in self.dispatch_pipeline (set in __init__), not here
+    # — reordering the strategy means reordering that list, not rewriting
+    # these methods or manage_power_flow().
+    # ------------------------------------------------------------------
+
+    def _step_electrolyzer_nominal(self, ctx: DispatchContext) -> None:
+        """Priority step — bring the electrolyzer to nominal load.
+
+        Writes ctx.p_elec, consumes ctx.remaining.
+        """
+        cfg = self._cfg
+        can_start = ctx.remaining >= cfg.ELEC_P_MIN_KW and not ctx.defer_electrolyzer_start
+        must_keep = (self._elec_is_running
+                     and self._elec_runtime_sec < self.ELEC_MIN_RUNTIME_SEC)
+
+        if ctx.defer_electrolyzer_start and ctx.remaining >= cfg.ELEC_P_MIN_KW and not must_keep:
+            ctx.events.append("Elec deferred (forecast: strong peak imminent)")
 
         if can_start or must_keep:
             # Target: nominal load (best efficiency point on S30/30 curve)
-            target = float(min(remaining, cfg.ELEC_P_NOM_KW))
+            target = float(min(ctx.remaining, cfg.ELEC_P_NOM_KW))
             target = max(target, cfg.ELEC_P_MIN_KW)
-            p_elec = self._ramp(target, timestep_sec)
-            remaining = max(0.0, remaining - p_elec)
+            p_elec = self._ramp(target, ctx.timestep_sec)
+            ctx.remaining = max(0.0, ctx.remaining - p_elec)
             self._elec_is_running   = True
-            self._elec_runtime_sec += timestep_sec
-            events.append(f"Elec (nominal) ← {p_elec:.2f} kW")
+            self._elec_runtime_sec += ctx.timestep_sec
+            ctx.events.append(f"Elec (nominal) ← {p_elec:.2f} kW")
         else:
             # Ramp down gracefully
-            p_elec = self._ramp(0.0, timestep_sec)
+            p_elec = self._ramp(0.0, ctx.timestep_sec)
             if self._elec_is_running and p_elec <= 0.0:
                 self._elec_is_running  = False
                 self._elec_runtime_sec = 0
-            events.append("Elec STANDBY (generation below minimum)")
+            ctx.events.append("Elec STANDBY (generation below minimum)")
 
-        # ── PRIORITY 2: BESS charging ──────────────────────────────────
-        # FIX v4.3: use max_charge_kW (kW) not headroom×capacity (kWh)
-        p_bess = 0.0
-        soc_headroom = cfg.BATT_SOC_MAX - current_soc
-        if soc_headroom > 0.01 and remaining > ps.bess_charge_hysteresis_kw:
-            p_bess    = min(remaining, cfg.BATT_MAX_CHARGE_KW)  # correct unit: kW
-            remaining = max(0.0, remaining - p_bess)
-            events.append(f"BESS ← {p_bess:.2f} kW (SoC {current_soc*100:.0f}%)")
+        ctx.p_elec = p_elec
 
-        # ── PRIORITY 3: Electrolyzer overload ─────────────────────────
-        # Only push to peak if already at nominal AND surplus is meaningful
-        p_overload = 0.0
+    def _step_bess_charge(self, ctx: DispatchContext) -> None:
+        """Priority step — charge BESS with surplus.
+
+        FIX v4.3: uses max_charge_kW (kW) not headroom×capacity (kWh).
+        `ctx.bess_soc_ceiling` (from forecast_aware_dispatch()) caps the
+        charge target below BATT_SOC_MAX when headroom should be kept
+        free for a predicted solar peak.
+
+        Writes ctx.p_bess, consumes ctx.remaining.
+        """
+        cfg, ps = self._cfg, self._ps
+        soc_ceiling = cfg.BATT_SOC_MAX if ctx.bess_soc_ceiling is None \
+            else min(cfg.BATT_SOC_MAX, ctx.bess_soc_ceiling)
+        soc_headroom = soc_ceiling - ctx.current_soc
+
+        if soc_headroom > 0.01 and ctx.remaining > ps.bess_charge_hysteresis_kw:
+            p_bess = min(ctx.remaining, cfg.BATT_MAX_CHARGE_KW)  # correct unit: kW
+            ctx.remaining -= p_bess
+            ctx.p_bess = p_bess
+            ceil_note = (f", forecast ceiling {soc_ceiling*100:.0f}%"
+                         if soc_ceiling < cfg.BATT_SOC_MAX - 0.01 else "")
+            ctx.events.append(f"BESS ← {p_bess:.2f} kW (SoC {ctx.current_soc*100:.0f}%{ceil_note})")
+
+    def _step_electrolyzer_overload(self, ctx: DispatchContext) -> None:
+        """Priority step — push electrolyzer to peak load if surplus allows.
+
+        Only engages once already at nominal load AND surplus is
+        meaningful. Reads and updates ctx.p_elec (adds on top of what
+        the nominal step already claimed), consumes ctx.remaining.
+        """
+        cfg = self._cfg
         if (self._elec_is_running
-                and remaining >= self.PEAK_SURPLUS_THRESHOLD_KW
-                and p_elec >= cfg.ELEC_P_NOM_KW * 0.90):
-            room = cfg.ELEC_P_MAX_KW - p_elec
-            ask  = min(remaining, room)
+                and ctx.remaining >= self.PEAK_SURPLUS_THRESHOLD_KW
+                and ctx.p_elec >= cfg.ELEC_P_NOM_KW * 0.90):
+            room = cfg.ELEC_P_MAX_KW - ctx.p_elec
+            ask  = min(ctx.remaining, room)
             if ask > 0.05:
-                total_target = p_elec + ask
-                p_total = self._ramp(total_target, timestep_sec)
-                p_overload = max(0.0, p_total - p_elec)
-                p_elec     = p_total                        # update total
-                remaining  = max(0.0, remaining - p_overload)
-                events.append(
-                    f"Elec (overload) → {p_elec:.2f} kW total")
+                total_target = ctx.p_elec + ask
+                p_total    = self._ramp(total_target, ctx.timestep_sec)
+                p_overload = max(0.0, p_total - ctx.p_elec)
+                ctx.remaining = max(0.0, ctx.remaining - p_overload)
+                ctx.p_elec     = p_total                     # update total
+                ctx.events.append(f"Elec (overload) → {ctx.p_elec:.2f} kW total")
 
-        # ── PRIORITY 4: EV charger ─────────────────────────────────────
-        # Primary EV source is the fuel cell (H₂ → FC → EV).
-        # Direct generation only provides a small supplement here.
-        p_ev = 0.0
-        if ev_demand_kw > cfg.EV_MIN_POWER_KW and remaining > 0.1:
-            p_ev      = min(remaining, ev_demand_kw * 0.3)  # max 30% from direct gen
-            remaining = max(0.0, remaining - p_ev)
+    def _step_ev(self, ctx: DispatchContext) -> None:
+        """Priority step — small direct-generation supplement to the EV charger.
+
+        Primary EV source is the fuel cell (H₂ → FC → EV); this only
+        provides a minor top-up from whatever generation remains.
+
+        Writes ctx.p_ev, consumes ctx.remaining.
+        """
+        cfg = self._cfg
+        if ctx.ev_demand_kw > cfg.EV_MIN_POWER_KW and ctx.remaining > 0.1:
+            p_ev = min(ctx.remaining, ctx.ev_demand_kw * 0.3)  # max 30% from direct gen
+            ctx.remaining -= p_ev
+            ctx.p_ev = p_ev
             if p_ev > 0.05:
-                events.append(f"EV (direct supplement) ← {p_ev:.2f} kW")
+                ctx.events.append(f"EV (direct supplement) ← {p_ev:.2f} kW")
 
-        # ── PRIORITY 5: Grid export ────────────────────────────────────
-        p_export = 0.0
-        if remaining >= ps.grid_export_min_surplus_kw:
-            p_export  = remaining
-            remaining = 0.0
-            events.append(f"Grid export → {p_export:.2f} kW")
+    def _step_grid_export(self, ctx: DispatchContext) -> None:
+        """Priority step — export genuine surplus only (≥ configured minimum).
 
-        # ── PRIORITY 6: Grid import (emergency) ────────────────────────
-        p_import = 0.0
-        if current_soc < ps.grid_import_trigger_soc:
-            p_import = cfg.BATT_MAX_CHARGE_KW * 0.4
-            events.append(
-                f"⚠ Grid IMPORT {p_import:.2f} kW (SoC < {ps.grid_import_trigger_soc*100:.0f}%)")
+        Writes ctx.p_export, consumes ctx.remaining.
+        """
+        ps = self._ps
+        if ctx.remaining >= ps.grid_export_min_surplus_kw:
+            ctx.p_export  = ctx.remaining
+            ctx.remaining = 0.0
+            ctx.events.append(f"Grid export → {ctx.p_export:.2f} kW")
 
-        # ── Determine electrolyzer mode label ──────────────────────────
-        if p_elec <= 0:
-            mode = "off"
-        elif p_elec < cfg.ELEC_P_NOM_KW * 0.90:
-            mode = "partial"
-        elif p_elec <= cfg.ELEC_P_NOM_KW * 1.05:
-            mode = "nominal"
-        else:
-            mode = "overload"
+    def _step_grid_import(self, ctx: DispatchContext) -> None:
+        """Priority step — emergency grid import when BESS SoC is critically low.
 
-        return PowerFlowResult(
-            power_to_electrolyzer_kw=round(p_elec, 3),
-            power_to_battery_kw=round(p_bess, 3),
-            power_to_ev_kw=round(p_ev, 3),
-            grid_export_kw=round(p_export, 3),
-            grid_import_kw=round(p_import, 3),
-            switching_event=" | ".join(events) if events else "Standby",
-            electrolyzer_mode=mode,
-        )
+        Writes ctx.p_import. Independent of ctx.remaining — this is an
+        emergency top-up, not part of the surplus waterfall.
+        """
+        cfg, ps = self._cfg, self._ps
+        if ctx.current_soc < ps.grid_import_trigger_soc:
+            ctx.p_import = cfg.BATT_MAX_CHARGE_KW * 0.4
+            ctx.events.append(
+                f"⚠ Grid IMPORT {ctx.p_import:.2f} kW (SoC < {ps.grid_import_trigger_soc*100:.0f}%)")
+
+    @staticmethod
+    def _classify_electrolyzer_mode(p_elec_kw: float, cfg) -> ElectrolyzerMode:
+        """Categorize delivered electrolyzer power into a named operating band."""
+        match p_elec_kw:
+            case _ if p_elec_kw <= 0:
+                return ElectrolyzerMode.OFF
+            case _ if p_elec_kw < cfg.ELEC_P_NOM_KW * 0.90:
+                return ElectrolyzerMode.PARTIAL
+            case _ if p_elec_kw <= cfg.ELEC_P_NOM_KW * 1.05:
+                return ElectrolyzerMode.NOMINAL
+            case _:
+                return ElectrolyzerMode.OVERLOAD
 
     # ------------------------------------------------------------------
     # Phase 3 — H₂ logistics
@@ -372,17 +568,16 @@ class EMSBrain:
         elif buffer_pct <= cfg.BUFFER_STOP_THRESHOLD:
             self._comp_on = False
 
-        comp_status: Literal["ON", "OFF"] = "ON" if self._comp_on else "OFF"
+        comp_status = CompressorStatus.ON if self._comp_on else CompressorStatus.OFF
 
         # Dispatch target
-        target: Literal["Storage", "Refueling Station (HRS)", "Fuel Cell (FC)"]
         if main_pct >= cfg.MAIN_TANK_START_THRESHOLD:
             if hrs_tank_kg < cfg.HRS_H2_TANK_CAPACITY_KG:
-                target = "Refueling Station (HRS)"
+                target = DispatchTarget.HRS
             else:
-                target = "Fuel Cell (FC)"
+                target = DispatchTarget.FUEL_CELL
         else:
-            target = "Storage"
+            target = DispatchTarget.STORAGE
 
         return H2LogisticsResult(
             compressor_status=comp_status,
@@ -399,7 +594,7 @@ class EMSBrain:
         self,
         h2_kg_produced: float,
         power_used_kw:  float,
-        source:         str,
+        source:         EnergySource | str,
         timestep_sec:   int = 10,
     ) -> EconomicsResult:
         """

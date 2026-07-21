@@ -143,6 +143,7 @@ class AlertSystem:
 
     def __init__(self) -> None:
         self.active: list[Alert] = []
+        self._prev_codes: set[str] = set()
 
     def clear(self) -> None:
         """Clear all alerts — call at the start of each tick."""
@@ -166,6 +167,22 @@ class AlertSystem:
             level, msg = self.CODES[code]
             if not any(a.code == code for a in self.active):
                 self.active.append(Alert(level, code, msg, value))
+
+    def newly_raised(self) -> list[Alert]:
+        """
+        Return alerts in `active` that were not active on the previous tick,
+        then advance the previous-tick snapshot.
+
+        Call once per tick, after all check() calls. Since clear()+check()
+        rebuild `active` fresh every tick, a still-active alert would
+        otherwise look "new" on every single tick — this filters that down
+        to genuine inactive→active transitions, so callers (e.g. DB
+        persistence) get one row per alert episode instead of a flood of
+        duplicate rows for every tick the condition stays true.
+        """
+        new = [a for a in self.active if a.code not in self._prev_codes]
+        self._prev_codes = {a.code for a in self.active}
+        return new
 
     def errors(self)   -> list[Alert]:
         return [a for a in self.active if a.level == "error"]
@@ -419,11 +436,19 @@ class TickEngine:
         incoming = total_gen
         if force_bess_charge:
             incoming += self.cfg.BATT_MAX_CHARGE_KW * 0.4
+        # The forecast overlay now actually steers dispatch, not just the
+        # display panel: bess_target_soc caps BESS charging (e.g. holds it
+        # at ~40% headroom ahead of a predicted solar peak instead of always
+        # filling to BATT_SOC_MAX), and defer_electrolyzer skips a fresh
+        # cold-start when a strong peak is only 1-3h away — it never
+        # interrupts a unit that's already running under the min-runtime guard.
         flow = self.ems.manage_power_flow(
             incoming_power_kw=incoming,
             current_soc=self.bess.soc,
             ev_demand_kw=ev_demand_kw,
             timestep_sec=self.cfg.TIMESTEP_SEC,
+            bess_soc_ceiling=(fc_decision.bess_target_soc if fc_decision else None),
+            defer_electrolyzer_start=(bool(fc_decision.defer_electrolyzer) if fc_decision else False),
         )
 
         # ── 5. BESS ────────────────────────────────────────────────────
@@ -501,6 +526,17 @@ class TickEngine:
             wind_r.operating_regime == "cut_out")
         self.alerts.check("GRID_IMPORT",
             flow.grid_import_kw > 0)
+
+        # Persist newly-raised alerts to the database — one row per alert
+        # episode (inactive→active transition), not a flood of duplicate
+        # rows for every tick the condition stays true.
+        _new_alerts = self.alerts.newly_raised()
+        if self.db is not None:
+            for _a in _new_alerts:
+                try:
+                    self.db.write_alert(_a.level, _a.code, _a.message)
+                except Exception:
+                    pass
 
         # ── 12. Build and return TickState ─────────────────────────────
         state = TickState(

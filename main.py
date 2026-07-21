@@ -387,7 +387,10 @@ with st.sidebar:
       ⚙ Simulation</div>""", unsafe_allow_html=True)
     st.session_state.sim_running = st.toggle(
         "Live simulation", value=st.session_state.sim_running)
-    refresh = st.slider("Refresh interval (sec)", 2, 15, 4)
+    refresh = st.slider(
+        "Refresh interval (sec)", 5, 30, 10,
+        help="Each refresh rebuilds the voice widget and stops any speech "
+             "in progress. Raise this if voice briefings cut off mid-sentence.")
     st.markdown("<div style='margin:10px 0 4px'></div>", unsafe_allow_html=True)
 
     # ── Weather override ───────────────────────────────────────────────────
@@ -577,24 +580,21 @@ _von       = "true" if st.session_state.get("voice_enabled", True) else "false"
 _btn_cls   = "on" if st.session_state.get("voice_enabled", True) else ""
 _btn_lbl   = "🔔 Alerts ON" if st.session_state.get("voice_enabled", True) else "🔕 Alerts OFF"
 
-_st = (f"System status tick {s.tick}. "
-       f"Generation {s.total_gen_kw:.1f} kilowatts. "
+_st = (f"Status. Generation {s.total_gen_kw:.1f} kilowatts. "
        f"Battery {s.bess_soc_pct:.0f} percent. "
        f"Hydrogen {s.h2_kg_h*1000:.1f} grams per hour. "
-       f"LCOH {s.lcoh:.2f} euros per kilogram. "
-       f"Revenue {s.cum_revenue_eur:.2f} euros. "
-       + ("No active alerts." if not alrt.active else
+       f"LCOH {s.lcoh:.2f}. "
+       + ("No alerts." if not alrt.active else
           f"{_n_err} critical, {_n_total} total alerts."))
 
-_hv = (f"Shift handover Zagreb LUMINIH2 at {now_dt.strftime('%H:%M')}. "
-       f"Hydrogen produced {s.cum_h2_kg:.3f} kilograms. "
-       f"Revenue {s.cum_revenue_eur:.2f} euros. "
-       f"Battery {s.bess_soc_pct:.0f} percent, health {s.bess_soh_pct:.1f} percent. "
+_hv = (f"Handover, {now_dt.strftime('%H:%M')}. "
+       f"Hydrogen {s.cum_h2_kg:.2f} kilograms. "
+       f"Revenue {s.cum_revenue_eur:.0f} euros. "
+       f"Battery {s.bess_soc_pct:.0f} percent, health {s.bess_soh_pct:.0f} percent. "
        f"Tank {s.main_tank_pct:.0f} percent. "
-       f"CO2 saved {s.cum_co2_kg:.2f} kilograms. "
-       + ("No alerts at handover." if not alrt.active
-          else f"{_n_total} alert{'s' if _n_total!=1 else ''} at handover.")
-       + " End of handover.")
+       + ("No alerts." if not alrt.active
+          else f"{_n_total} alert{'s' if _n_total!=1 else ''}.")
+       + " End handover.")
 
 _prod  = f"Hydrogen {s.h2_kg_h*1000:.1f} grams per hour. Cumulative {s.cum_h2_kg:.3f} kilograms. Efficiency {s.elec_eff_pct:.0f} percent."
 _batt  = f"Battery {s.bess_soc_pct:.0f} percent charge. {s.bess_temp_c:.0f} degrees. Health {s.bess_soh_pct:.1f} percent."
