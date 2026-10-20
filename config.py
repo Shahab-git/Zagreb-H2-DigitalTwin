@@ -39,28 +39,31 @@ class Location:
 
 
 # =============================================================================
-# 2. SOLAR PV — 32 × 360 W panels (real datasheet)
+# 2. SOLAR PV — 32 panels, mixed ratings, total 15 kW (real datasheet)
 # =============================================================================
 @dataclass(frozen=True)
 class SolarPV:
     """
-    Datasheet: 32 × monocrystalline 360 Wp panels
-    Total nameplate: 11.52 kW DC
+    Datasheet: 32 × monocrystalline panels with varying rated powers
+    Total nameplate: 15.0 kW DC (customer specification)
+    Note: panels have mixed ratings; 360 Wp is the representative per-panel
+    value used for modelling (15,000 W / 32 panels ≈ 469 W avg, but
+    360 Wp is the datasheet reference model — total_capacity_kw governs).
     """
     device: DeviceInfo = field(default_factory=lambda: DeviceInfo(
         manufacturer="Generic Mono",
-        model="360W Monocrystalline",
+        model="360W Monocrystalline (representative)",
         datasheet_ref="customer_datasheet_pv"
     ))
     # Panel electrical (STC: 1000 W/m², 25°C, AM1.5)
-    panel_count:         int   = 42
-    rated_power_wp:      float = 360.0       # W per panel ±5W
-    voc_v:               float = 47.0        # V open-circuit
-    vmp_v:               float = 39.6        # V at MPP
-    isc_a:               float = 9.67        # A short-circuit
-    imp_a:               float = 9.10        # A at MPP
+    panel_count:         int   = 32           # Actual installed panel count
+    rated_power_wp:      float = 360.0        # W — representative datasheet value; panels vary
+    voc_v:               float = 47.0         # V open-circuit
+    vmp_v:               float = 39.6         # V at MPP
+    isc_a:               float = 9.67         # A short-circuit
+    imp_a:               float = 9.10         # A at MPP
     # System
-    total_capacity_kw:   float = 15.0        # Customer spec: 15 kW (42 × 360W ≈ 15.12 kW)
+    total_capacity_kw:   float = 15.0         # Customer spec: 15 kW total (governs simulation)
     temp_coeff_pct_c:    float = -0.0035     # -0.35%/°C (mono, typical)
     noct_c:              float = 45.0        # Nominal Operating Cell Temp
     # Inverter (ideal values as specified)
@@ -166,11 +169,21 @@ class Electrolyzer:
     h2_nom_kg_h:         float = 0.05932     # 0.66 × 0.08988
     h2_peak_kg_h:        float = 0.08449     # 0.94 × 0.08988
 
-    # Electrochemical efficiency curve (load_kw → η) — from datasheet
+    # H₂ flow curve (load_kw → kg/h) — primary dispatch curve, direct from datasheet
+    # Nm³/h values: 0.19 / 0.66 / 0.94; converted at 1 Nm³ = 0.08988 kg
+    flow_curve: Dict[float, float] = field(default_factory=lambda: {
+        0.74: 0.01708,   # 0.19 Nm³/h × 0.08988 kg/Nm³
+        3.00: 0.05932,   # 0.66 Nm³/h × 0.08988 kg/Nm³
+        5.63: 0.08449,   # 0.94 Nm³/h × 0.08988 kg/Nm³
+    })
+
+    # Electrochemical efficiency curve (load_kw → η, HHV basis) — reference only
+    # η_HHV = (ṁ_H₂ × HHV_H₂) / P_in;  HHV_H₂ = 39.4 kWh/kg
+    # At nominal: (0.05932 × 39.4) / 3.0 = 77.9% HHV ≈ 78%
     eff_curve: Dict[float, float] = field(default_factory=lambda: {
-        0.74: 0.90,   # 90% at lowest partial load
-        3.00: 0.78,   # 78% at nominal
-        5.63: 0.59,   # 59% at peak load
+        0.74: 0.90,   # 90% HHV at lowest partial load
+        3.00: 0.78,   # 78% HHV at nominal
+        5.63: 0.59,   # 59% HHV at peak load
     })
 
     # Water (from datasheet)
@@ -261,6 +274,8 @@ class Compressor:
     # Power
     installed_power_kva: float = 3.0
     power_kw:            float = 2.7         # ≈ 3 kVA × 0.9 PF
+    # Specific energy: power_kw / flow_max_kg_h = 2.7 / 0.08333 = 32.4 kWh/kg
+    specific_energy_kwh_kg: float = 32.4    # kWh of electricity per kg H₂ compressed
     # Operation
     temp_nom_c:          float = 40.0
     min_runtime_sec:     int   = 120         # Hysteresis guard
@@ -434,7 +449,8 @@ class Config:
     ELEC_P_MIN_KW          = electrolyzer.p_min_kw       # 0.74 kW
     ELEC_P_NOM_KW          = electrolyzer.p_nom_kw       # 3.0 kW
     ELEC_P_MAX_KW          = electrolyzer.p_max_kw       # 5.63 kW
-    ELEC_EFF_CURVE         = electrolyzer.eff_curve
+    ELEC_FLOW_CURVE        = electrolyzer.flow_curve   # power_kw → kg/h (primary dispatch)
+    ELEC_EFF_CURVE         = electrolyzer.eff_curve    # power_kw → η_HHV (reference only)
     WATER_CONSUMPTION_L_KG = electrolyzer.water_l_kg_h2  # 11.13 L/kg
     STACK_REPLACEMENT_COST = electrolyzer.stack_replacement_cost_eur
     PURITY_TARGET          = electrolyzer.purity_target_pct
@@ -451,9 +467,10 @@ class Config:
     LEAK_DETECTION_THRESHOLD  = tank.leak_threshold_kg_s * 3600  # kg/h
 
     # Compressor HCS-100
-    COMPRESSOR_POWER_KW       = compressor.power_kw       # 2.7 kW
-    COMPRESSOR_MIN_RUNTIME_SEC = compressor.min_runtime_sec
-    JOULE_THOMSON_COEFF       = compressor.joule_thomson_coeff
+    COMPRESSOR_POWER_KW          = compressor.power_kw            # 2.7 kW
+    COMPRESSOR_SPECIFIC_KWH_KG   = compressor.specific_energy_kwh_kg  # 32.4 kWh/kg
+    COMPRESSOR_MIN_RUNTIME_SEC   = compressor.min_runtime_sec
+    JOULE_THOMSON_COEFF          = compressor.joule_thomson_coeff
 
     # Fuel Cell AIRCELL 3000
     FC_POWER_NOM_KW           = fuel_cell.nominal_power_kw  # 3.0 kW

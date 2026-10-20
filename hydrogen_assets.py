@@ -107,7 +107,8 @@ class ElectrolyzerS30:
         After drying: always > 99.95% (AIRCELL 3000 requirement met).
     """
 
-    H2_LHV_KWH_KG: float = 33.33   # Lower Heating Value of H₂ [kWh/kg]
+    H2_HHV_KWH_KG: float = 39.4    # Higher Heating Value of H₂ [kWh/kg] — for efficiency reporting
+    H2_LHV_KWH_KG: float = 33.33   # Lower Heating Value of H₂ [kWh/kg] — retained for reference
     SOH_WARN:       float = 0.80    # SoH warning threshold
 
     def __init__(self) -> None:
@@ -115,6 +116,10 @@ class ElectrolyzerS30:
         self.p_min        = cfg.ELEC_P_MIN_KW          # 0.74 kW
         self.p_nom        = cfg.ELEC_P_NOM_KW           # 3.00 kW
         self.p_max        = cfg.ELEC_P_MAX_KW           # 5.63 kW
+        # Flow curve: power_kw → kg/h (primary, direct from datasheet)
+        self._flow_pts_p  = sorted(cfg.ELEC_FLOW_CURVE.keys())
+        self._flow_pts_kg = [cfg.ELEC_FLOW_CURVE[p] for p in self._flow_pts_p]
+        # Efficiency curve: power_kw → η_HHV (for reporting/diagnostics only)
         self._power_pts   = sorted(cfg.ELEC_EFF_CURVE.keys())
         self._eff_pts     = [cfg.ELEC_EFF_CURVE[p] for p in self._power_pts]
 
@@ -152,17 +157,21 @@ class ElectrolyzerS30:
         lf  = p / self.p_max      # load factor [0–1]
         dt_h = Config.TIMESTEP_SEC / 3600.0
 
-        # ── 1. Efficiency: interpolate + SoH derate ────────────────────
-        base_eff = float(np.interp(p, self._power_pts, self._eff_pts))
-        # SoH degradation reduces efficiency: soh=1.0 → +0%, soh=0.70 → −3%
-        soh_factor   = 0.97 + 0.03 * self.soh
-        # Mild temperature bonus: PEM runs slightly better warm
-        # Capped at +2% above 20°C ambient
-        temp_bonus   = float(np.clip((ambient_temp_c - 20.0) * 0.001, 0.0, 0.02))
-        current_eff  = float(np.clip(base_eff * soh_factor + temp_bonus, 0.0, 1.0))
+        # ── 1. H₂ flow rate: interpolate directly from datasheet flow curve ──
+        # Primary production path — no HHV/LHV basis ambiguity
+        base_h2_kg_h = float(np.interp(p, self._flow_pts_p, self._flow_pts_kg))
 
-        # ── 2. H₂ production rate ──────────────────────────────────────
-        h2_kg_h   = (p * current_eff) / self.H2_LHV_KWH_KG
+        # SoH degradation reduces output: soh=1.0 → +0%, soh=0.70 → −3%
+        soh_factor   = 0.97 + 0.03 * self.soh
+        # Mild temperature bonus: PEM runs slightly better warm (capped at +2%)
+        temp_bonus_f = float(np.clip(1.0 + (ambient_temp_c - 20.0) * 0.001, 1.0, 1.02))
+        h2_kg_h      = base_h2_kg_h * soh_factor * temp_bonus_f
+
+        # Efficiency (HHV basis) — for diagnostics and reporting only
+        base_eff     = float(np.interp(p, self._power_pts, self._eff_pts))
+        soh_factor_e = 0.97 + 0.03 * self.soh
+        temp_bonus_e = float(np.clip((ambient_temp_c - 20.0) * 0.001, 0.0, 0.02))
+        current_eff  = float(np.clip(base_eff * soh_factor_e + temp_bonus_e, 0.0, 1.0))
         water_l_h = h2_kg_h * Config.WATER_CONSUMPTION_L_KG
 
         # ── 3. H₂ purity (cross-over model) ────────────────────────────

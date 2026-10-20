@@ -397,8 +397,7 @@ class ScenarioEngine:
             elec_kw = float(np.clip(elec_kw, 0.0, cfg.ELEC_P_MAX_KW))
 
             if elec_kw >= cfg.ELEC_P_MIN_KW:
-                eff    = self._elec_efficiency(elec_kw) * cold_penalty
-                h2_h   = (elec_kw * eff) / 33.33   # kg this hour
+                h2_h   = self._elec_flow(elec_kw) * cold_penalty   # kg this hour
                 acc_h2_kg      += h2_h
                 acc_water_l    += h2_h * cfg.WATER_CONSUMPTION_L_KG
                 acc_o2_nm3     += h2_h * 5.6
@@ -408,6 +407,14 @@ class ScenarioEngine:
                 comp_h  = min(h2_h, cfg.compressor.flow_max_kg_h)
                 if comp_h > 0:
                     acc_comp_runs += 1
+                    # Compressor electrical consumption [kWh this hour]
+                    comp_elec_h  = comp_h * cfg.COMPRESSOR_SPECIFIC_KWH_KG
+                    comp_from_surplus = min(comp_elec_h, remaining_h)
+                    comp_from_grid    = max(0.0, comp_elec_h - comp_from_surplus)
+                    remaining_h  = max(0.0, remaining_h - comp_from_surplus)
+                    if comp_from_grid > 0:
+                        acc_import += comp_from_grid
+                    acc_cost += comp_elec_h * params.grid_buy_eur
 
                 # HRS allocation: 60% of compressed H₂
                 h2_hrs_h = comp_h * 0.6
@@ -504,13 +511,17 @@ class ScenarioEngine:
         return float(np.clip(power_kw * avail_factor, 0, cap_kw))   # kWh for 1 h
 
     # ------------------------------------------------------------------
-    # Electrolyzer efficiency — S30/30 curve
+    # Electrolyzer H₂ flow — S30/30 datasheet flow curve
     # ------------------------------------------------------------------
+    # Interpolates directly from the verified datasheet operating points
+    # (power_kw → kg/h), avoiding any HHV/LHV basis ambiguity.
+    # Points: {0.74 kW → 0.01708 kg/h, 3.0 kW → 0.05932 kg/h, 5.63 kW → 0.08449 kg/h}
 
-    def _elec_efficiency(self, power_kw: float) -> float:
+    def _elec_flow(self, power_kw: float) -> float:
+        """Return H₂ mass flow [kg/h] for a given electrical input [kW]."""
         if power_kw < self.cfg.ELEC_P_MIN_KW:
             return 0.0
-        pts = sorted(self.cfg.ELEC_EFF_CURVE.items())
+        pts = sorted(self.cfg.ELEC_FLOW_CURVE.items())
         xs  = [p[0] for p in pts]
         ys  = [p[1] for p in pts]
         return float(np.interp(power_kw, xs, ys))
@@ -529,8 +540,10 @@ class ScenarioEngine:
                 continue
             h2_total = sum(d.h2_produced_kg for d in days)
             elec_h   = sum(d.electrolyzer_hours for d in days)
+            # HHV efficiency: η_HHV = (ṁ_H₂ × 39.4 kWh/kg) / P_in
+            H2_HHV_KWH_KG = 39.4
             eff_avg  = (
-                h2_total / (elec_h * self.cfg.ELEC_P_NOM_KW / 33.33) * 100
+                (h2_total * H2_HHV_KWH_KG) / (elec_h * self.cfg.ELEC_P_NOM_KW) * 100
                 if elec_h > 0 else 0.0
             )
             monthly.append(MonthlyResult(
