@@ -80,6 +80,8 @@ class DailyResult:
     electrolyzer_hours: float
     soiling_loss_pct:  float
     compressor_runs:   int
+    fc_kwh:            float = 0.0   # fuel-cell output [kWh/day]
+    fc_h2_kg:          float = 0.0   # H₂ consumed by FC [kg/day]
 
 
 @dataclass
@@ -260,6 +262,8 @@ class ScenarioEngine:
                     electrolyzer_hours=round(dr["elec_hours"], 2),
                     soiling_loss_pct=round((1 - soiling) * 100, 2),
                     compressor_runs=dr["comp_runs"],
+                    fc_kwh=round(dr.get("fc_kwh", 0.0), 3),
+                    fc_h2_kg=round(dr.get("fc_h2_kg", 0.0), 5),
                 ))
 
         monthly = self._aggregate_monthly(daily_results)
@@ -348,6 +352,12 @@ class ScenarioEngine:
         acc_comp_runs  = 0
         acc_revenue    = 0.0
         acc_co2_kg     = 0.0
+        acc_fc_kwh     = 0.0
+        acc_fc_h2_kg   = 0.0
+
+        # Fuel-cell H₂ buffer: 60% of compressed H₂ goes to HRS tank
+        # (tracks available H₂ for FC across the 24-hour window)
+        fc_h2_tank_kg  = 0.0          # accumulates intra-day from HRS allocation
 
         # ── 24-step loop ──────────────────────────────────────────────
         for h in range(24):
@@ -416,9 +426,10 @@ class ScenarioEngine:
                         acc_import += comp_from_grid
                     acc_cost += comp_elec_h * params.grid_buy_eur
 
-                # HRS allocation: 60% of compressed H₂
+                # HRS allocation: 60% of compressed H₂ → FC buffer
                 h2_hrs_h = comp_h * 0.6
                 acc_h2_hrs_kg += h2_hrs_h
+                fc_h2_tank_kg += h2_hrs_h   # available for FC later this day
 
                 # Energy cost this hour
                 if "Grid" in params.name or params.grid_buy_eur > 0:
@@ -443,6 +454,25 @@ class ScenarioEngine:
                 )
                 bess_soc -= discharge
                 remaining_h += discharge
+
+            # ── Fuel cell dispatch (AIRCELL 3000, 3.0 kW nom) ────────
+            # FC activates when renewables + BESS are insufficient and
+            # H₂ is available in the HRS buffer (h2_pressure 2–9 barg).
+            # Output: ≤ FC_POWER_NOM_KW; H₂ consumed: 0.066 kg/kWh.
+            if total_h < cfg.ELEC_P_MIN_KW and fc_h2_tank_kg > 0.0:
+                fc_demand_kw  = float(np.clip(
+                    cfg.FC_POWER_NOM_KW,
+                    0.0, cfg.FC_POWER_NOM_KW,
+                ))
+                fc_h2_needed  = fc_demand_kw * cfg.FC_H2_CONSUMPTION_KG_KWH  # kg/h
+                if fc_h2_needed > fc_h2_tank_kg:
+                    # Scale output to available H₂
+                    fc_demand_kw  = fc_h2_tank_kg / cfg.FC_H2_CONSUMPTION_KG_KWH
+                    fc_h2_needed  = fc_h2_tank_kg
+                fc_h2_tank_kg -= fc_h2_needed
+                remaining_h   += fc_demand_kw       # [kWh] this hour
+                acc_fc_kwh    += fc_demand_kw
+                acc_fc_h2_kg  += fc_h2_needed
 
             # ── Grid export / import ─────────────────────────────────
             grid_export_h = remaining_h * 0.85
@@ -487,6 +517,8 @@ class ScenarioEngine:
             "o2_nm3":      acc_o2_nm3,
             "elec_hours":  acc_elec_hours,
             "comp_runs":   acc_comp_runs,
+            "fc_kwh":      acc_fc_kwh,
+            "fc_h2_kg":    acc_fc_h2_kg,
         }
 
     # ------------------------------------------------------------------
