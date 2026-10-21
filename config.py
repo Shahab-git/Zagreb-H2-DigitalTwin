@@ -97,6 +97,8 @@ class WindTurbine:
     rated_speed_ms:      float = 11.0        # m/s
     cut_out_ms:          float = 60.0        # m/s (survival speed)
     hub_height_m:        float = 30.0        # m
+    ref_height_m:        float = 10.0        # m — ZAMG measurement height
+    wind_shear_exponent: float = 0.143       # power-law exponent, open terrain (IEC class II)
     rotor_diameter_m:    float = 7.0         # m (typical for 10kW class)
     turbulence_limit:    float = 0.20        # Safety cutout TI threshold
     # Zagreb terrain roughness class II

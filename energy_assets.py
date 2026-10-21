@@ -211,6 +211,14 @@ class WindSystem:
                 operating_regime="cut_out",
             )
 
+        # ── Hub-height adjustment (power law) ────────────────────────
+        # Input wind speed is measured at ref_height_m (10 m, ZAMG station);
+        # adjust to hub height (30 m) using power-law exponent α = 0.143.
+        wind_speed_ms = wind_speed_ms * (
+            (Config.wind.hub_height_m / Config.wind.ref_height_m)
+            ** Config.wind.wind_shear_exponent
+        )  # v_hub = v_ref × (h_hub / h_ref)^α
+
         # ── Below cut-in ─────────────────────────────────────────────
         if (not wind_speed_ms) or wind_speed_ms < self.cut_in_ms:
             return WindResult(
